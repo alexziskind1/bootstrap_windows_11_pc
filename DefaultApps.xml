@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DefaultAssociations>
+  <!-- Web Browser (HTML files and http/https protocols) -->
+  <Association Identifier=".htm" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  <Association Identifier=".html" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  <Association Identifier="http" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  <Association Identifier="https" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  
+  <!-- Additional web-related file types -->
+  <Association Identifier=".pdf" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  <Association Identifier=".shtml" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  <Association Identifier=".svg" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  <Association Identifier=".webp" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  <Association Identifier=".xht" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+  <Association Identifier=".xhtml" ProgId="ChromeHTML" ApplicationName="Google Chrome" />
+</DefaultAssociations>
