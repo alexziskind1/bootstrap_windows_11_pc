@@ -46,6 +46,9 @@ if (Test-Path $defaultApps) {
 # 2) Taskbar pins
 Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Applying taskbar pins..."
 
+# Clear existing taskbar pins first
+Clear-ReviewPCTaskbarPins -ScriptPrefix "Finish"
+
 # Resolve common .lnk targets
 $ChromeLnk    = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
 $VSCodeLnk    = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Visual Studio Code.lnk"
@@ -89,7 +92,7 @@ if ($pins.Count -eq 0) {
 <LayoutModificationTemplate xmlns="http://schemas.microsoft.com/Start/2014/LayoutModification"
                             xmlns:taskbar="http://schemas.microsoft.com/Start/2014/TaskbarLayout"
                             Version="1">
-  <CustomTaskbarLayoutCollection>
+  <CustomTaskbarLayoutCollection PinListPlacement="Replace">
     <defaultlayout:TaskbarLayout xmlns:defaultlayout="http://schemas.microsoft.com/Start/2014/FullDefaultLayout">
       <taskbar:TaskbarPinList>
 $xmlPins
@@ -105,7 +108,19 @@ $xmlPins
 
   $xml | Out-File (Join-Path $shellDefault "TaskbarLayoutModification.xml") -Encoding UTF8 -Force
   $xml | Out-File (Join-Path $shellCurrent "TaskbarLayoutModification.xml") -Encoding UTF8 -Force
-  Write-Host "[Finish] Wrote taskbar layout for current and new users."
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Wrote taskbar layout for current and new users."
+  
+  # Force Windows to reload the taskbar layout  
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Applying taskbar layout changes..."
+  try {
+    # Restart Explorer to apply taskbar changes immediately
+    Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Seconds 2
+    Start-Process explorer.exe
+    Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Taskbar layout applied successfully."
+  } catch {
+    Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: Could not restart Explorer to apply taskbar changes: $($_.Exception.Message)" -ForegroundColor Yellow
+  }
 }
 
 # 3) Disable notifications
@@ -127,6 +142,11 @@ try {
   Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' 0
   Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarDa' 0
   Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarMn' 0
+  
+  # Remove default taskbar pins (Microsoft Store, Outlook, etc.)
+  Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband' 'NumPinnedItems' 0
+  Set-ReviewPCRegistry HKCU 'Software\Policies\Microsoft\Windows\Explorer' 'NoPinningToTaskbar' 0  # 0 allows custom pinning
+  
   #Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarAl' 0   # 0=left, 1=center
   #Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'ShowSecondsInSystemClock' 1
   Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - UI hygiene settings applied successfully."
@@ -159,16 +179,6 @@ try {
   Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Dev and power tweaks applied successfully."
 } catch {
   Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR applying dev/power tweaks: $($_.Exception.Message)" -ForegroundColor Red
-}
-
-# 6) Restart Explorer
-Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Restarting Explorer..."
-try {
-  Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
-  Start-Process explorer.exe
-  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Explorer restarted successfully."
-} catch {
-  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR restarting Explorer: $($_.Exception.Message)" -ForegroundColor Red
 }
 
 # Configure Git if parameters were provided and not already configured

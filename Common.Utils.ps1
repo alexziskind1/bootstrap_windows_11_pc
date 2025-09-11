@@ -100,6 +100,32 @@ function Set-ReviewPCGitConfig {
   }
 }
 
+# Function to clear existing taskbar pins
+function Clear-ReviewPCTaskbarPins {
+  param(
+    [string]$ScriptPrefix = "Setup"
+  )
+  
+  Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Clearing existing taskbar pins..."
+  try {
+    # Clear current user's taskbar pins by removing the registry entries
+    $taskbarPinPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband"
+    if (Test-Path $taskbarPinPath) {
+      Remove-Item -Path $taskbarPinPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    
+    # Also clear the taskbar layout cache
+    $shellPath = Join-Path $env:LOCALAPPDATA "Microsoft\Windows\Shell"
+    if (Test-Path $shellPath) {
+      Get-ChildItem -Path $shellPath -Filter "*TaskbarLayout*" | Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+    
+    Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Existing taskbar pins cleared."
+  } catch {
+    Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: Could not fully clear taskbar pins: $($_.Exception.Message)" -ForegroundColor Yellow
+  }
+}
+
 # Function to set execution policy for the session
 function Set-SessionExecutionPolicy {
   Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
