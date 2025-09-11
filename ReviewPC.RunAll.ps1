@@ -36,6 +36,32 @@ $LogPath = Start-ReviewPCLogging -ScriptName "RunAll"
 try {
   Write-Host "[RunAll] Starting ReviewPC one-click setup..." -ForegroundColor Cyan
   
+  # ---------------------------
+  # User Input Section
+  # ---------------------------
+  Write-Host "`n[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Collecting user configuration..." -ForegroundColor Yellow
+  
+  # Git Configuration
+  Write-Host "`nGit will be installed as part of this setup. Please provide your Git configuration:" -ForegroundColor Cyan
+  
+  do {
+    $GitUserName = Read-Host "Enter your Git user name (e.g., 'John Doe')"
+  } while ([string]::IsNullOrWhiteSpace($GitUserName))
+  
+  do {
+    $GitUserEmail = Read-Host "Enter your Git email address (e.g., 'john@example.com')"
+  } while ([string]::IsNullOrWhiteSpace($GitUserEmail) -or $GitUserEmail -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$')
+  
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Git config: Name='$GitUserName', Email='$GitUserEmail'" -ForegroundColor Green
+  
+  # Store Git config for later use
+  $GitConfig = @{
+    UserName = $GitUserName
+    UserEmail = $GitUserEmail
+  }
+  
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - User configuration collected successfully.`n" -ForegroundColor Green
+  
   # Define script paths
   $DebloatScript = Join-Path $ScriptRoot "ReviewPC.Debloat.ps1"
   $OneDriveScript = Join-Path $ScriptRoot "ReviewPC.RemoveOneDrive.ps1"
@@ -64,14 +90,20 @@ try {
   # 3) Install applications
   # ---------------------------
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running App Installation..." -ForegroundColor Cyan
-  Invoke-ReviewPCScript -ScriptPath $InstallScript -ScriptName "App Installation"
+  $installArgs = @()
+  if ($GitConfig.UserName) { $installArgs += "-GitUserName"; $installArgs += $GitConfig.UserName }
+  if ($GitConfig.UserEmail) { $installArgs += "-GitUserEmail"; $installArgs += $GitConfig.UserEmail }
+  Invoke-ReviewPCScript -ScriptPath $InstallScript -ScriptName "App Installation" -Arguments $installArgs
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - App Installation completed." -ForegroundColor Green
 
   # ---------------------------
   # 4) Finish setup (Chrome default, pins, notifications, tweaks)
   # ---------------------------
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running Finish Setup..." -ForegroundColor Cyan
-  Invoke-ReviewPCScript -ScriptPath $FinishScript -ScriptName "Finish Setup"
+  $finishArgs = @()
+  if ($GitConfig.UserName) { $finishArgs += "-GitUserName"; $finishArgs += $GitConfig.UserName }
+  if ($GitConfig.UserEmail) { $finishArgs += "-GitUserEmail"; $finishArgs += $GitConfig.UserEmail }
+  Invoke-ReviewPCScript -ScriptPath $FinishScript -ScriptName "Finish Setup" -Arguments $finishArgs
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Finish Setup completed." -ForegroundColor Green
 
   # ---------------------------

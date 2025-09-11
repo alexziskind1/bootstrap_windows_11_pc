@@ -1,13 +1,13 @@
 <#
  ReviewPC.Install.ps1 — App installer for ReviewPC setup
- Uses Chocolatey (noWrite-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing benchmarks/monitoring..." -ForegroundColor Cyan
-Install-ReviewPCPackage -PackageName "cpu-z"
-Install-ReviewPCPackage -PackageName "hwmonitor"
-Install-ReviewPCPackage -PackageName "crystaldiskmark"
-# Cinebench isn't reliably packaged; install manually if needed
-# Install-ReviewPCPackage -PackageName "cinebench"t required)
+ Uses Chocolatey (no winget required)
  Part of the ReviewPC setup suite
 #>
+
+param(
+  [string]$GitUserName,
+  [string]$GitUserEmail
+)
 
 # Import common utilities
 $ScriptRoot = Split-Path -Parent $PSCommandPath
@@ -91,7 +91,13 @@ Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing uti
 Install-ReviewPCPackage -PackageName "notepadplusplus"
 Install-ReviewPCPackage -PackageName "powertoys"
 
-Write-Host "[Install] All apps installed successfully." -ForegroundColor Green
+Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - All apps installed successfully." -ForegroundColor Green
+
+# Configure Git if parameters were provided
+if ($GitUserName -and $GitUserEmail) {
+  Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Configuring Git..." -ForegroundColor Cyan
+  Set-ReviewPCGitConfig -UserName $GitUserName -UserEmail $GitUserEmail -ScriptPrefix "Install"
+}
 
 # Stop logging
 Stop-ReviewPCLogging

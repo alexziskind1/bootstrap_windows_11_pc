@@ -8,6 +8,11 @@
   Part of the ReviewPC setup suite
 #>
 
+param(
+  [string]$GitUserName,
+  [string]$GitUserEmail
+)
+
 # Import common utilities
 $ScriptRoot = Split-Path -Parent $PSCommandPath
 . (Join-Path $ScriptRoot "Common.Utils.ps1")
@@ -164,6 +169,29 @@ try {
   Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Explorer restarted successfully."
 } catch {
   Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR restarting Explorer: $($_.Exception.Message)" -ForegroundColor Red
+}
+
+# Configure Git if parameters were provided and not already configured
+if ($GitUserName -and $GitUserEmail) {
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Checking Git configuration..." -ForegroundColor Cyan
+  try {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path","User")
+    
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+      $currentName = & git config --global user.name 2>$null
+      $currentEmail = & git config --global user.email 2>$null
+      
+      if (-not $currentName -or -not $currentEmail) {
+        Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Configuring Git (fallback)..." -ForegroundColor Yellow
+        Set-ReviewPCGitConfig -UserName $GitUserName -UserEmail $GitUserEmail -ScriptPrefix "Finish"
+      } else {
+        Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Git already configured: $currentName <$currentEmail>" -ForegroundColor Green
+      }
+    }
+  } catch {
+    Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Could not check Git configuration: $($_.Exception.Message)" -ForegroundColor Yellow
+  }
 }
 
 Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Done. If pins or default apps do not show immediately, sign out/in or reboot." -ForegroundColor Green

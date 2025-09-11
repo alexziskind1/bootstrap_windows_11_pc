@@ -63,6 +63,43 @@ function Install-ReviewPCPackage {
   }
 }
 
+# Function to configure Git with user settings
+function Set-ReviewPCGitConfig {
+  param(
+    [Parameter(Mandatory)][string]$UserName,
+    [Parameter(Mandatory)][string]$UserEmail,
+    [string]$ScriptPrefix = "Setup"
+  )
+  
+  Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Configuring Git global settings..."
+  try {
+    # Refresh PATH to ensure git is available
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path","User")
+    
+    # Check if git is available
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+      Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: Git not found in PATH. Skipping Git configuration." -ForegroundColor Yellow
+      return
+    }
+    
+    # Set git global config
+    & git config --global user.name "$UserName"
+    & git config --global user.email "$UserEmail"
+    
+    # Verify configuration
+    $configName = & git config --global user.name
+    $configEmail = & git config --global user.email
+    
+    Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Git configured successfully:" -ForegroundColor Green
+    Write-Host "[$ScriptPrefix]   - user.name: $configName" -ForegroundColor Green
+    Write-Host "[$ScriptPrefix]   - user.email: $configEmail" -ForegroundColor Green
+    
+  } catch {
+    Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR configuring Git: $($_.Exception.Message)" -ForegroundColor Red
+  }
+}
+
 # Function to set execution policy for the session
 function Set-SessionExecutionPolicy {
   Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
