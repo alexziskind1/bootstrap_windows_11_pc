@@ -1,6 +1,11 @@
 <#
  ReviewPC.Install.ps1 — App installer for ReviewPC setup
- Uses Chocolatey (no winget required)
+ Uses ChocolateWrite-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing benchmarks/monitoring..." -ForegroundColor Cyan
+Install-ReviewPCPackage -PackageName "cpu-z"
+Install-ReviewPCPackage -PackageName "hwmonitor"
+Install-ReviewPCPackage -PackageName "crystaldiskmark"
+# Cinebench isn't reliably packaged; install manually if needed
+# Install-ReviewPCPackage -PackageName "cinebench"winget required)
  Part of the ReviewPC setup suite
 #>
 
@@ -90,6 +95,7 @@ Install-ReviewPCPackage -PackageName "vlc"
 Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing utilities..." -ForegroundColor Cyan
 Install-ReviewPCPackage -PackageName "notepadplusplus"
 Install-ReviewPCPackage -PackageName "powertoys"
+Install-ReviewPCPackage -PackageName "microsoft-windows-terminal"
 
 Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - All apps installed successfully." -ForegroundColor Green
 
