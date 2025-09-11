@@ -36,7 +36,7 @@ choco feature enable -n=useRememberedArgumentsForUpgrades | Out-Null
 
 # 3) Install Apps
 Write-Host "[Install] Installing browsers..." -ForegroundColor Cyan
-choco install googlechrome
+choco install googlechrome --ignore-checksums
 # choco install firefox
 
 Write-Host "[Install] Installing dev tools..." -ForegroundColor Cyan
