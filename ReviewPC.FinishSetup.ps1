@@ -21,19 +21,25 @@ Set-SessionExecutionPolicy
 # Start logging  
 $LogPath = Start-ReviewPCLogging -ScriptName "Finish"
 
-Write-Host "[Finish] Starting finisher..."
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Starting finisher..."
 
 # 1) Set Chrome as default via DefaultApps.xml
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Checking for DefaultApps.xml..."
 $defaultApps = Join-Path $ScriptRoot 'DefaultApps.xml'
 if (Test-Path $defaultApps) {
-  Write-Host "[Finish] Importing DefaultApps.xml (Chrome as default)..."
-  Dism /Online /Import-DefaultAppAssociations:$defaultApps | Out-Null
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Importing DefaultApps.xml (Chrome as default)..."
+  try {
+    Dism /Online /Import-DefaultAppAssociations:$defaultApps | Out-Null
+    Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Default app associations imported successfully."
+  } catch {
+    Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR importing default apps: $($_.Exception.Message)" -ForegroundColor Red
+  }
 } else {
-  Write-Host "[Finish] DefaultApps.xml not found beside this script. Skipping default-apps import."
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - DefaultApps.xml not found beside this script. Skipping default-apps import." -ForegroundColor Yellow
 }
 
 # 2) Taskbar pins
-Write-Host "[Finish] Applying taskbar pins..."
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Applying taskbar pins..."
 
 # Resolve common .lnk targets
 $ChromeLnk    = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
@@ -98,40 +104,69 @@ $xmlPins
 }
 
 # 3) Disable notifications
-Write-Host "[Finish] Disabling notifications..."
-Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\PushNotifications' 'ToastEnabled' 0
-Set-ReviewPCRegistry HKCU 'Software\Policies\Microsoft\Windows\Explorer' 'DisableNotificationCenter' 1
-Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_TOASTS_ENABLED' 0
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Disabling notifications..."
+try {
+  Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\PushNotifications' 'ToastEnabled' 0
+  Set-ReviewPCRegistry HKCU 'Software\Policies\Microsoft\Windows\Explorer' 'DisableNotificationCenter' 1
+  Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_TOASTS_ENABLED' 0
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Notification settings configured successfully."
+} catch {
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR configuring notifications: $($_.Exception.Message)" -ForegroundColor Red
+}
 
 # 4) UI hygiene (center taskbar)
-Write-Host "[Finish] Reasserting UI hygiene..."
-Set-ReviewPCRegistry HKLM 'SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot' 'TurnOffWindowsCopilot' 1
-Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\Shell\Copilot' 'CopilotAvailability' 0
-Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' 0
-Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarDa' 0
-Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarMn' 0
-#Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarAl' 0   # 0=left, 1=center
-#Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'ShowSecondsInSystemClock' 1
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Reasserting UI hygiene..."
+try {
+  Set-ReviewPCRegistry HKLM 'SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot' 'TurnOffWindowsCopilot' 1
+  Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\Shell\Copilot' 'CopilotAvailability' 0
+  Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' 0
+  Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarDa' 0
+  Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarMn' 0
+  #Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarAl' 0   # 0=left, 1=center
+  #Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'ShowSecondsInSystemClock' 1
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - UI hygiene settings applied successfully."
+} catch {
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR applying UI hygiene: $($_.Exception.Message)" -ForegroundColor Red
+}
 
 # 5) Dev & power tweaks
-Write-Host "[Finish] Applying dev and power tweaks..."
-powercfg -h off | Out-Null
-powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 | Out-Null
-$ultimate = (powercfg -list) -match 'Ultimate Performance'
-if ($ultimate) {
-  $guid = ($ultimate -replace '.*GUID:\s*([a-f0-9\-]+).*','$1')
-  if ($guid) { powercfg -setactive $guid | Out-Null }
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Applying dev and power tweaks..."
+try {
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Disabling hibernation..."
+  powercfg -h off | Out-Null
+  
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Setting up Ultimate Performance power plan..."
+  powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 | Out-Null
+  $ultimate = (powercfg -list) -match 'Ultimate Performance'
+  if ($ultimate) {
+    $guid = ($ultimate -replace '.*GUID:\s*([a-f0-9\-]+).*','$1')
+    if ($guid) { 
+      powercfg -setactive $guid | Out-Null 
+      Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Ultimate Performance power plan activated."
+    }
+  }
+  
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Configuring development settings..."
+  Set-ReviewPCRegistry HKLM 'SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1
+  Set-ReviewPCRegistry HKLM 'SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowAllTrustedApps' 1
+  Set-ReviewPCRegistry HKLM 'SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowDevelopmentWithoutDevLicense' 1
+  
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Dev and power tweaks applied successfully."
+} catch {
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR applying dev/power tweaks: $($_.Exception.Message)" -ForegroundColor Red
 }
-Set-ReviewPCRegistry HKLM 'SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1
-Set-ReviewPCRegistry HKLM 'SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowAllTrustedApps' 1
-Set-ReviewPCRegistry HKLM 'SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowDevelopmentWithoutDevLicense' 1
 
 # 6) Restart Explorer
-Write-Host "[Finish] Restarting Explorer..."
-Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Process explorer.exe
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Restarting Explorer..."
+try {
+  Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
+  Start-Process explorer.exe
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Explorer restarted successfully."
+} catch {
+  Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR restarting Explorer: $($_.Exception.Message)" -ForegroundColor Red
+}
 
-Write-Host "[Finish] Done. If pins or default apps do not show immediately, sign out/in or reboot."
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Done. If pins or default apps do not show immediately, sign out/in or reboot." -ForegroundColor Green
 
 # Stop logging
 Stop-ReviewPCLogging

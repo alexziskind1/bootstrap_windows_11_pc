@@ -45,26 +45,34 @@ try {
   # ---------------------------
   # 1) Run Win11Debloat (SAFE FLAGS)
   # ---------------------------
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running Win11 Debloat..." -ForegroundColor Cyan
   $debloatArgs = @()
   if ($SysprepMode) { $debloatArgs += "-SysprepMode" }
   if ($Silent) { $debloatArgs += "-Silent" }
   
   Invoke-ReviewPCScript -ScriptPath $DebloatScript -ScriptName "Win11Debloat" -Arguments $debloatArgs
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Win11 Debloat completed." -ForegroundColor Green
 
   # ---------------------------
   # 2) Remove OneDrive completely
   # ---------------------------
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running OneDrive Removal..." -ForegroundColor Cyan
   Invoke-ReviewPCScript -ScriptPath $OneDriveScript -ScriptName "OneDrive Removal"
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - OneDrive Removal completed." -ForegroundColor Green
 
   # ---------------------------
   # 3) Install applications
   # ---------------------------
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running App Installation..." -ForegroundColor Cyan
   Invoke-ReviewPCScript -ScriptPath $InstallScript -ScriptName "App Installation"
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - App Installation completed." -ForegroundColor Green
 
   # ---------------------------
   # 4) Finish setup (Chrome default, pins, notifications, tweaks)
   # ---------------------------
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running Finish Setup..." -ForegroundColor Cyan
   Invoke-ReviewPCScript -ScriptPath $FinishScript -ScriptName "Finish Setup"
+  Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Finish Setup completed." -ForegroundColor Green
 
   # ---------------------------
   # 5) Summary

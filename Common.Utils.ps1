@@ -40,6 +40,29 @@ function Stop-ReviewPCLogging {
   Stop-Transcript | Out-Null
 }
 
+# Function to install a package with enhanced logging
+function Install-ReviewPCPackage {
+  param(
+    [Parameter(Mandatory)][string]$PackageName,
+    [string]$ExtraArgs = "",
+    [string]$ScriptPrefix = "Install"
+  )
+  
+  Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing $PackageName..."
+  try {
+    $cmd = "choco install $PackageName $ExtraArgs"
+    Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Executing: $cmd"
+    Invoke-Expression $cmd
+    if ($LASTEXITCODE -eq 0) {
+      Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - $PackageName installed successfully." -ForegroundColor Green
+    } else {
+      Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: $PackageName installation returned exit code $LASTEXITCODE" -ForegroundColor Yellow
+    }
+  } catch {
+    Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR installing $PackageName`: $($_.Exception.Message)" -ForegroundColor Red
+  }
+}
+
 # Function to set execution policy for the session
 function Set-SessionExecutionPolicy {
   Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
@@ -65,12 +88,14 @@ function Set-ReviewPCRegistry {
   try {
     if (-not (Test-Path $full)) { New-Item -Path $full -Force | Out-Null }
     New-ItemProperty -Path $full -Name $Name -Value $Value -PropertyType $Type -Force | Out-Null
+    Write-Verbose "Registry: Set $Hive\$Path\$Name = $Value (PowerShell method)"
   } catch {
     # Fallback using reg.exe (helps if policy locks PowerShell provider)
     $regType = switch ($Type) { 'String' {'REG_SZ'} 'DWord' {'REG_DWORD'} 'QWord' {'REG_QWORD'} }
     $root = if ($Hive -eq 'HKLM') { 'HKLM' } else { 'HKCU' }
     $cmd = "ADD `"$root\$Path`" /v `"$Name`" /t $regType /d $Value /f"
     & reg.exe $cmd | Out-Null
+    Write-Verbose "Registry: Set $Hive\$Path\$Name = $Value (reg.exe fallback)"
   }
 }
 
