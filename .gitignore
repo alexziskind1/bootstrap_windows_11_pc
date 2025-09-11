@@ -1,0 +1,42 @@
+# Log files
+logs/
+*.log
+
+# PowerShell execution policy bypass files
+*.ps1.txt
+
+# Temporary files
+*.tmp
+*.temp
+~*
+
+# Windows system files
+Thumbs.db
+Desktop.ini
+*.lnk
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# IDE/Editor files
+.vscode/
+.vs/
+*.swp
+*.swo
+
+# Test output files
+Test-*.xml
+*TestResults*
+
+# Personal configuration files (if any are added later)
+config.local.*
+settings.local.*
+
+# Downloaded files (if script downloads anything)
+downloads/
+temp/
+
+# Any generated XML layouts
+*TaskbarLayoutModification.xml
