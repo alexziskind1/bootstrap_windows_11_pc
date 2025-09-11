@@ -118,6 +118,13 @@ $xmlPins
     Start-Sleep -Seconds 2
     Start-Process explorer.exe
     Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Taskbar layout applied successfully."
+  
+  # Note about Windows 11 taskbar limitations
+  Write-Host "`n[Finish] NOTE: Windows 11 has restricted automated taskbar pinning." -ForegroundColor Yellow
+  Write-Host "[Finish] If apps didn't pin automatically, manually pin them:" -ForegroundColor Yellow
+  Write-Host "[Finish]   1. Open each app (Task Manager: Ctrl+Shift+Esc)" -ForegroundColor Yellow  
+  Write-Host "[Finish]   2. Right-click the app icon in taskbar while running" -ForegroundColor Yellow
+  Write-Host "[Finish]   3. Select 'Pin to taskbar'" -ForegroundColor Yellow
   } catch {
     Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: Could not restart Explorer to apply taskbar changes: $($_.Exception.Message)" -ForegroundColor Yellow
   }

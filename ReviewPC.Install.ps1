@@ -1,6 +1,13 @@
 <#
  ReviewPC.Install.ps1 — App installer for ReviewPC setup
- Uses ChocolateWrite-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing benchmarks/monitoring..." -ForegroundColor Cyan
+ Uses ChocolateWrite-Host "Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing benchmarks/monitoring..." -ForegroundColor Cyan
+Install-ReviewPCPackage -PackageName "cpu-z"
+Install-ReviewPCPackage -PackageName "hwmonitor"
+Install-ReviewPCPackage -PackageName "crystaldiskmark"
+# Cinebench isn't reliably packaged; install manually if needed
+# Install-ReviewPCPackage -PackageName "cinebench"
+
+Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing media/productivity..." -ForegroundColor Cyan" -ForegroundColor Cyan
 Install-ReviewPCPackage -PackageName "cpu-z"
 Install-ReviewPCPackage -PackageName "hwmonitor"
 Install-ReviewPCPackage -PackageName "crystaldiskmark"

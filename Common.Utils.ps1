@@ -174,7 +174,7 @@ function Invoke-ReviewPCScript {
     Write-Host "[RunAll] Running $ScriptName..." -ForegroundColor Cyan
     try {
       if ($Arguments.Count -gt 0) {
-        & $ScriptPath @Arguments
+        & $ScriptPath $Arguments
       } else {
         & $ScriptPath
       }
