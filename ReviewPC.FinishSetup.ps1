@@ -5,46 +5,23 @@
   - Disable notifications
   - Hide Copilot/Search/Widgets/Chat, center taskbar
   - Dev & power tweaks
+  Part of the ReviewPC setup suite
 #>
 
-function Ensure-Admin {
-  $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-  $p  = New-Object Security.Principal.WindowsPrincipal($id)
-  if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "[Finish] Elevation required, relaunching as admin..."
-    $psi = New-Object System.Diagnostics.ProcessStartInfo "powershell"
-    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    $psi.Verb = "runas"
-    [Diagnostics.Process]::Start($psi) | Out-Null
-    exit
-  }
-}
-Ensure-Admin
-Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
+# Import common utilities
 $ScriptRoot = Split-Path -Parent $PSCommandPath
-Write-Host "[Finish] Starting finisher..."
+. (Join-Path $ScriptRoot "Common.Utils.ps1")
 
-# Helper: set registry value (with reg.exe fallback)
-function Set-Reg {
-  param(
-    [Parameter(Mandatory)][ValidateSet('HKLM','HKCU')]$Hive,
-    [Parameter(Mandatory)][string]$Path,
-    [Parameter(Mandatory)][string]$Name,
-    [Parameter(Mandatory)]$Value,
-    [ValidateSet('String','DWord','QWord')]$Type='DWord'
-  )
-  $full = Join-Path "${Hive}:" $Path
-  try {
-    if (-not (Test-Path $full)) { New-Item -Path $full -Force | Out-Null }
-    New-ItemProperty -Path $full -Name $Name -Value $Value -PropertyType $Type -Force | Out-Null
-  } catch {
-    # Fallback using reg.exe (helps if policy locks via PowerShell provider)
-    $regType = switch ($Type) { 'String' {'REG_SZ'} 'DWord' {'REG_DWORD'} 'QWord' {'REG_QWORD'} }
-    $root = if ($Hive -eq 'HKLM') { 'HKLM' } else { 'HKCU' }
-    $cmd  = "ADD `"$root\$Path`" /v `"$Name`" /t $regType /d $Value /f"
-    & reg.exe $cmd | Out-Null
-  }
-}
+# Ensure running as Administrator
+Ensure-Admin -ScriptName "Finish"
+
+# Set execution policy for session
+Set-SessionExecutionPolicy
+
+# Start logging  
+$LogPath = Start-ReviewPCLogging -ScriptName "Finish"
+
+Write-Host "[Finish] Starting finisher..."
 
 # 1) Set Chrome as default via DefaultApps.xml
 $defaultApps = Join-Path $ScriptRoot 'DefaultApps.xml'
@@ -122,19 +99,19 @@ $xmlPins
 
 # 3) Disable notifications
 Write-Host "[Finish] Disabling notifications..."
-Set-Reg HKCU 'Software\Microsoft\Windows\CurrentVersion\PushNotifications' 'ToastEnabled' 0
-Set-Reg HKCU 'Software\Policies\Microsoft\Windows\Explorer' 'DisableNotificationCenter' 1
-Set-Reg HKCU 'Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_TOASTS_ENABLED' 0
+Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\PushNotifications' 'ToastEnabled' 0
+Set-ReviewPCRegistry HKCU 'Software\Policies\Microsoft\Windows\Explorer' 'DisableNotificationCenter' 1
+Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Notifications\Settings' 'NOC_GLOBAL_SETTING_TOASTS_ENABLED' 0
 
 # 4) UI hygiene (center taskbar)
 Write-Host "[Finish] Reasserting UI hygiene..."
-Set-Reg HKLM 'SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot' 'TurnOffWindowsCopilot' 1
-Set-Reg HKCU 'Software\Microsoft\Windows\Shell\Copilot' 'CopilotAvailability' 0
-Set-Reg HKCU 'Software\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' 0
-Set-Reg HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarDa' 0
-Set-Reg HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarMn' 0
-#Set-Reg HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarAl' 0   # 0=left, 1=center
-#Set-Reg HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'ShowSecondsInSystemClock' 1
+Set-ReviewPCRegistry HKLM 'SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot' 'TurnOffWindowsCopilot' 1
+Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\Shell\Copilot' 'CopilotAvailability' 0
+Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' 0
+Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarDa' 0
+Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarMn' 0
+#Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarAl' 0   # 0=left, 1=center
+#Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'ShowSecondsInSystemClock' 1
 
 # 5) Dev & power tweaks
 Write-Host "[Finish] Applying dev and power tweaks..."
@@ -145,9 +122,9 @@ if ($ultimate) {
   $guid = ($ultimate -replace '.*GUID:\s*([a-f0-9\-]+).*','$1')
   if ($guid) { powercfg -setactive $guid | Out-Null }
 }
-Set-Reg HKLM 'SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1
-Set-Reg HKLM 'SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowAllTrustedApps' 1
-Set-Reg HKLM 'SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowDevelopmentWithoutDevLicense' 1
+Set-ReviewPCRegistry HKLM 'SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1
+Set-ReviewPCRegistry HKLM 'SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowAllTrustedApps' 1
+Set-ReviewPCRegistry HKLM 'SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' 'AllowDevelopmentWithoutDevLicense' 1
 
 # 6) Restart Explorer
 Write-Host "[Finish] Restarting Explorer..."
@@ -155,3 +132,6 @@ Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Process explorer.exe
 
 Write-Host "[Finish] Done. If pins or default apps do not show immediately, sign out/in or reboot."
+
+# Stop logging
+Stop-ReviewPCLogging

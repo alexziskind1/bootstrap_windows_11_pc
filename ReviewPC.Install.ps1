@@ -1,21 +1,22 @@
 <#
  ReviewPC.Install.ps1 — App installer for ReviewPC setup
  Uses Chocolatey (no winget required)
- Run as Administrator
+ Part of the ReviewPC setup suite
 #>
 
-# 0) Ensure running as Admin
-$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "[Install] Relaunching as Administrator..."
-    $psi = New-Object System.Diagnostics.ProcessStartInfo "powershell"
-    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
-    $psi.Verb = "runas"
-    [Diagnostics.Process]::Start($psi) | Out-Null
-    exit
-}
+# Import common utilities
+$ScriptRoot = Split-Path -Parent $PSCommandPath
+. (Join-Path $ScriptRoot "Common.Utils.ps1")
 
-Set-ExecutionPolicy Bypass -Scope Process -Force | Out-Null
+# Ensure running as Administrator
+Ensure-Admin -ScriptName "Install"
+
+# Set execution policy for session
+Set-SessionExecutionPolicy
+
+# Start logging
+$LogPath = Start-ReviewPCLogging -ScriptName "Install"
+
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # 1) Install Chocolatey if missing
@@ -70,3 +71,6 @@ choco install notepadplusplus
 choco install powertoys
 
 Write-Host "[Install] All apps installed successfully." -ForegroundColor Green
+
+# Stop logging
+Stop-ReviewPCLogging

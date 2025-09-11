@@ -1,0 +1,39 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20250910211659
+Username: NUCBOX_K8PLUS\alex
+RunAs User: NUCBOX_K8PLUS\alex
+Configuration Name: 
+Machine: NUCBOX_K8PLUS (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\alex\Code\bootstrap_windows_11_pc\ReviewPC.RemoveOneDrive.ps1
+Process ID: 21096
+PSVersion: 5.1.26100.4061
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.4061
+BuildVersion: 10.0.26100.4061
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+[RemoveOneDrive] Logging to C:\Users\alex\Code\bootstrap_windows_11_pc\logs\RemoveOneDrive_20250910_211659.log
+[RemoveOneDrive] Removing OneDrive completely...
+[RemoveOneDrive] Stopping OneDrive processes...
+taskkill : ERROR: The process "OneDrive.exe" not found.
+At C:\Users\alex\Code\bootstrap_windows_11_pc\ReviewPC.RemoveOneDrive.ps1:25 char:3
++   taskkill /F /IM OneDrive.exe 2>$null
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: The proc...exe" not found.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+[RemoveOneDrive] Attempting winget uninstall...
+No installed package found matching input criteria.
+[RemoveOneDrive] winget uninstall succeeded.
+[RemoveOneDrive] Cleaning up leftover folders...
+[RemoveOneDrive] Removed: C:\Users\alex\AppData\Local\Microsoft\OneDrive
+[RemoveOneDrive] Removed: C:\ProgramData\Microsoft OneDrive
+[RemoveOneDrive] OneDrive removal completed successfully.
+**********************
+Windows PowerShell transcript end
+End time: 20250910211702
+**********************
