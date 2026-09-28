@@ -63,6 +63,15 @@ $VStudioCandidates = @(
 $VStudioLnk = $null
 foreach ($c in $VStudioCandidates) { if (Test-Path $c) { $VStudioLnk = $c; break } }
 
+# On Windows-on-ARM the apps install to the SAME Start-Menu locations as x64
+# (Program Files / LocalAppData), but the ARM code path uses winget/direct
+# installers rather than Chocolatey. Verify the expected .lnk files exist so a
+# failed ARM install surfaces here instead of the taskbar pin step silently
+# no-oping. (Get-ReviewPCArch / Test-ReviewPCIsArm64 come from Common.Utils.ps1.)
+$hostArch = Get-ReviewPCArch
+$isArm64 = Test-ReviewPCIsArm64
+Write-Host "[Finish] Host architecture: $hostArch" -ForegroundColor DarkGray
+
 # Create Task Manager shortcut if missing
 $TaskMgrDir = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\System Tools"
 $TaskMgrLnk = Join-Path $TaskMgrDir "Task Manager.lnk"
@@ -78,6 +87,20 @@ if (-not (Test-Path $TaskMgrLnk)) {
 $pins = @()
 foreach ($lnk in @($TaskMgrLnk,$VStudioLnk,$VSCodeLnk,$TerminalLnk,$ChromeLnk)) {
   if ($lnk -and (Test-Path $lnk)) { $pins += $lnk }
+}
+
+# Shortcut presence summary (arch-aware): on ARM these Start-Menu .lnk files are
+# produced by the winget/direct installers; report any missing so taskbar pinning
+# does not silently no-op after a partially-failed ARM install.
+Write-Host "[Finish] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Resolved pin targets:"
+foreach ($c in @(@{n='Task Manager';p=$TaskMgrLnk},@{n='Visual Studio';p=$VStudioLnk},
+                 @{n='VS Code';p=$VSCodeLnk},@{n='Windows Terminal';p=$TerminalLnk},
+                 @{n='Chrome';p=$ChromeLnk})) {
+  if ($c.p -and (Test-Path $c.p)) {
+    Write-Host "[Finish]   [OK] $($c.n): $($c.p)" -ForegroundColor Green
+  } else {
+    Write-Host "[Finish]   [MISSING] $($c.n)" -ForegroundColor Yellow
+  }
 }
 
 if ($pins.Count -eq 0) {

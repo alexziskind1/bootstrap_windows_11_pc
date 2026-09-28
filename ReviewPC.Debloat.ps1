@@ -2,6 +2,13 @@
   ReviewPC.Debloat.ps1
   Runs Win11Debloat with safe, recommended flags
   Part of the ReviewPC setup suite
+
+  Windows-on-ARM (arm64v2): This step is ARCH-AGNOSTIC. Win11Debloat performs
+  registry + Appx/Start-menu operations that behave identically on x64 and
+  ARM64 hosts, and it deliberately keeps the App Installer (winget) intact,
+  which the ARM64 install path relies on. No per-archive changes are required.
+  The remote payload (https://debloat.raphi.re/) is fetched at runtime; if it
+  is unreachable the whole step is caught and reported, not fatal.
 #>
 
 param(

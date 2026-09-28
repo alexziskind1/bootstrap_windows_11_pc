@@ -2,6 +2,12 @@
   ReviewPC.RemoveOneDrive.ps1
   Completely removes OneDrive from the system
   Part of the ReviewPC setup suite
+
+  Windows-on-ARM (arm64v2): This step is ARCH-AGNOSTIC. OneDrive is an in-box
+  Windows provisioned package whose uninstaller paths (System32/SysWOW64
+  OneDriveSetup.exe) and winget uninstall both work identically on x64 and
+  ARM64 hosts. No per-architecture changes are required. (Note: the Debloat
+  step also removes OneDrive; this is a belt-and-suspenders cleanup.)
 #>
 
 # Import common utilities

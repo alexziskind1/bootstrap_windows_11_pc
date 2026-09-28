@@ -2,9 +2,12 @@
   ReviewPC.RunAll.ps1
   One-click new-PC setup for reviews:
    1) Runs Win11Debloat with your chosen flags
-   2) Removes OneDrive completely  
-   3) Runs your ReviewPC.Install.ps1 (apps via Chocolatey)
+   2) Removes OneDrive completely
+   3) Runs your ReviewPC.Install.ps1 (arch-aware app install: Chocolatey on x64,
+      native ARM64 via winget/direct URLs on Windows-on-ARM)
    4) Runs ReviewPC.FinishSetup.ps1 (Chrome default, taskbar pins, notifications off, dev/power tweaks)
+   5) Runs the post-install ARM64 audit (Test-ReviewPCArm64v2.ps1) and reports
+      PASS/WARN/FAIL - wired into the normal suite run (arm64v2).
 
   Usage (PowerShell as admin is automatic):
     Set-ExecutionPolicy Bypass -Scope Process -Force
@@ -13,11 +16,15 @@
   Optional switches:
     -SysprepMode   => apply debloat to Default profile (affects NEW users) in addition to current user
     -Silent        => hides debloat prompts (default on)
+    -InstallDocker => also install Docker Desktop (native ARM64, needs WSL2 backend)
+    -SkipAudit     => do not run the post-install ARM64 audit at the end
 #>
 
 param(
   [switch]$SysprepMode,
-  [switch]$Silent = $true
+  [switch]$Silent = $true,
+  [switch]$InstallDocker,
+  [switch]$SkipAudit
 )
 
 # Import common utilities
@@ -93,6 +100,7 @@ try {
   $installArgs = @()
   if ($GitConfig.UserName) { $installArgs += "-GitUserName"; $installArgs += $GitConfig.UserName }
   if ($GitConfig.UserEmail) { $installArgs += "-GitUserEmail"; $installArgs += $GitConfig.UserEmail }
+  if ($InstallDocker) { $installArgs += "-InstallDocker" }
   Invoke-ReviewPCScript -ScriptPath $InstallScript -ScriptName "App Installation" -Arguments $installArgs
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - App Installation completed." -ForegroundColor Green
 
@@ -107,9 +115,38 @@ try {
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Finish Setup completed." -ForegroundColor Green
 
   # ---------------------------
-  # 5) Summary
+  # 5) Post-install ARM64 audit (wired into the normal suite run)
   # ---------------------------
-  Write-Host "`n[RunAll] ✅ All setup steps completed successfully!" -ForegroundColor Green
+  $auditExit = 0
+  if ($SkipAudit) {
+    Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Skipping post-install audit (-SkipAudit)." -ForegroundColor Yellow
+  } else {
+    $AuditScript = Join-Path $ScriptRoot "Test-ReviewPCArm64v2.ps1"
+    if (Test-Path $AuditScript) {
+      Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running post-install ARM64 audit..." -ForegroundColor Cyan
+      # Run the auditor in a child PowerShell process so its `exit` status is
+      # captured as $LASTEXITCODE without terminating this orchestrator. On an
+      # ARM64 host it runs Live (real PE inspection); on an x64 host the auditor
+      # automatically falls back to DryRun (which exits 0).
+      & powershell -NoProfile -ExecutionPolicy Bypass -File $AuditScript -Mode Live
+      $auditExit = $LASTEXITCODE
+      if ($auditExit -eq 0) {
+        Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ARM64 audit passed." -ForegroundColor Green
+      } else {
+        Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ARM64 audit FAILED (exit $auditExit). See audit output above." -ForegroundColor Red
+      }
+    } else {
+      Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Audit script not found at $AuditScript; skipping." -ForegroundColor Yellow
+    }
+  }
+
+  # ---------------------------
+  # 6) Summary
+  # ---------------------------
+  Write-Host "`n[RunAll] ✅ All setup steps completed." -ForegroundColor Green
+  if ($auditExit -ne 0) {
+    Write-Host "[RunAll] ⚠️  The post-install ARM64 audit reported failures (exit $auditExit) - resolve them before considering the setup complete." -ForegroundColor Yellow
+  }
   Write-Host "[RunAll] If taskbar pins or default apps didn't update immediately, sign out/in or reboot." -ForegroundColor Cyan
 
 } catch {
