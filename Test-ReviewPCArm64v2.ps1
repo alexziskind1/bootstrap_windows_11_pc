@@ -95,6 +95,86 @@ Write-Host "=========================================================="
 
 $Items = Get-ReviewPCAppCatalog
 
+# ---------------------------------------------------------------------------
+# Completeness closure check (arm64v2).
+#
+# Enforces the "no app left unaudited" invariant for the whole suite:
+#   * Every app the installer's ARM64 path references (via `$Results +=
+#     @{ Id='...'; ... }` in ReviewPC.Install.ps1) must have a catalog entry.
+#     If a future editor adds an app to the ARM install path but forgets to
+#     add an ARM-equivalent entry to Get-ReviewPCAppCatalog, the audit would
+#     otherwise silently skip it; we FAIL instead of skipping.
+#   * Every catalog entry must declare its ARM64 InstallMethod (so the install
+#     mechanism is explicit, never silent).
+#   * No catalog Id may be duplicated, and the catalog must be non-empty, so
+#     an editor cannot accidentally drop entries.
+#
+# (Presence of the primary binary vs. the declared path/CLI is verified by the
+# Live evaluation loop below, which FAILs any native-expected app whose binary
+# cannot be resolved or is non-ARM64. This completeness check is host-portable
+# and therefore does not depend on Windows root env vars resolving to paths.)
+#
+# Runs in BOTH DryRun and Live modes (it is a static check that needs no
+# Windows/filesystem), and contributes to the exit code (FAIL => non-zero).
+# ---------------------------------------------------------------------------
+function Get-ReviewPCInstallerArmIds {
+  param([string]$InstallScript = (Join-Path $ScriptRoot "ReviewPC.Install.ps1"))
+  $ids = @()
+  try {
+    if ($InstallScript -and (Test-Path -LiteralPath $InstallScript)) {
+      foreach ($l in (Get-Content -LiteralPath $InstallScript)) {
+        # Matches:  $Results += @{ Id='chrome'; Ok=... }
+        if ($l -match '\$Results\s*\+=\s*@\{[^}]*\bId\s*=\s*''([^'']+)''') {
+          $ids += $Matches[1]
+        }
+      }
+    }
+  } catch {
+    Write-Host "[audit] WARNING: could not read ReviewPC.Install.ps1 for completeness check: $($_.Exception.Message)" -ForegroundColor Yellow
+  }
+  return @($ids | Sort-Object -Unique)
+}
+
+function Test-ReviewPCCatalogComplete {
+  param([AllowNull()]$CatalogItems)
+  $errs = 0
+  $list = @($CatalogItems)
+  if ($list.Count -eq 0) {
+    Write-Host "[FAIL][completeness] Get-ReviewPCAppCatalog returned ZERO entries. The audit surface is empty - an editor likely dropped the catalog." -ForegroundColor Red
+    return 1
+  }
+  $dup = $list | Group-Object Id | Where-Object { $_.Count -gt 1 }
+  if ($dup) {
+    foreach ($g in $dup) {
+      Write-Host "[FAIL][completeness] Duplicate catalog Id '$($g.Name)' ($($g.Count) entries). Ids must be unique." -ForegroundColor Red
+      $errs++
+    }
+  }
+  foreach ($a in $list) {
+    if ([string]::IsNullOrWhiteSpace($a.Id)) {
+      Write-Host "[FAIL][completeness] Catalog entry missing 'Id'." -ForegroundColor Red
+      $errs++
+      continue
+    }
+    if ([string]::IsNullOrWhiteSpace($a.InstallMethod)) {
+      Write-Host "[FAIL][completeness] Catalog entry '$($a.Id)' has an empty InstallMethod. Document how it is installed on ARM so the mechanism is explicit." -ForegroundColor Red
+      $errs++
+    }
+  }
+  foreach ($id in (Get-ReviewPCInstallerArmIds)) {
+    if (-not ($list | Where-Object { $_.Id -eq $id })) {
+      Write-Host "[FAIL][completeness] ReviewPC.Install.ps1 ARM path installs app '$id' but it has NO catalog entry (no auditable ARM equivalent). Add it to Get-ReviewPCAppCatalog." -ForegroundColor Red
+      $errs++
+    }
+  }
+  return $errs
+}
+
+$completenessFails = Test-ReviewPCCatalogComplete -CatalogItems $Items
+if ($completenessFails -gt 0) {
+  Write-Host "[FAIL][completeness] $completenessFails catalog completeness violation(s) found. See messages above." -ForegroundColor Red
+}
+
 if ($Mode -eq 'DryRun') {
   Write-Host "`n[DryRun] Documentation / path check. No ARM64 host required."
   Write-Host "This script locates each exe and reads its PE machine type; the"
@@ -102,7 +182,13 @@ if ($Mode -eq 'DryRun') {
   Write-Host "have no native ARM64 build upstream.`n"
   foreach ($i in $Items) {
     Write-Host "  [$($i.Id)] $($i.Name)  (NativeExpected=$($i.NativeExpected), method: $($i.InstallMethod))"
-    foreach ($p in $i.Paths) { Write-Host ("      expected path: " + $p) }
+    foreach ($p in $i.Paths) {
+      if ($p) { Write-Host ("      expected path: " + $p) }
+    }
+  }
+  if ($completenessFails -gt 0) {
+    Write-Host "`n[DryRun] FAILED: catalog completeness violations require fixes before this branch is trustworthy." -ForegroundColor Red
+    exit 1
   }
   Write-Host "`n[DryRun] Done (exit 0)."
   exit 0
@@ -207,9 +293,14 @@ $warn = ($results | Where-Object Verdict -eq 'WARN').Count
 Write-Host ("PASS: " + $pass + "  WARN: " + $warn + "  FAIL: " + $fail)
 Write-Host "WARN items (Miniconda3, Chocolatey, opt-out Docker) have no native"
 Write-Host "ARM64 build upstream and intentionally run emulated; they are not failures."
-if ($fail -gt 0) {
-  Write-Host "`n*** $fail item(s) FAILED. Native ARM64 was expected for these but was" -ForegroundColor Red
-  Write-Host "*** not found / not native. Review the ARM64 install path for them." -ForegroundColor Red
+if (($fail -gt 0) -or ($completenessFails -gt 0)) {
+  if ($fail -gt 0) {
+    Write-Host "`n*** $fail item(s) FAILED. Native ARM64 was expected for these but was" -ForegroundColor Red
+    Write-Host "*** not found / not native. Review the ARM64 install path for them." -ForegroundColor Red
+  }
+  if ($completenessFails -gt 0) {
+    Write-Host "`n*** $completenessFails catalog completeness violation(s) found (missing/duplicate/undocumented catalog entries)." -ForegroundColor Red
+  }
   exit 1
 }
 Write-Host "`nAll required items are native ARM64 (or documented WARN)." -ForegroundColor Green

@@ -241,6 +241,19 @@ function Test-ReviewPCIsArm64 {
 # (Test-ReviewPCArm64v2.ps1) consume this catalog, so path/version
 # expectations can never drift.
 #
+# ---------------------------------------------------------------------
+# Null-safe path join. Windows-specific root environment variables
+# (ProgramFiles / ProgramData / LOCALAPPDATA / SystemRoot / USERPROFILE)
+# are absent on non-Windows hosts; Join-Path would throw on a $null Path.
+# Returning $null keeps the shared catalog host-portable (DryRun mode runs
+# on ANY machine, including Linux), and callers skip $null candidates.
+# ---------------------------------------------------------------------
+function ReviewPCPath {
+  param([string]$Base, [string]$Leaf)
+  if ([string]::IsNullOrEmpty($Base)) { return $null }
+  return (Join-Path $Base $Leaf)
+}
+
 # Field semantics:
 #   Id          - stable internal key.
 #   Name        - human-readable, used by auditor/summary.
@@ -266,130 +279,130 @@ function Get-ReviewPCAppCatalog {
        NativeExpected=$false;
        WarnNote="Chocolatey has no native ARM64 build (it is a .NET x86/x64 binary) and runs under x64 emulation on WoA. In arm64v2 it is bootstrapped only; per-app installs are routed to winget/direct ARM64 URLs.";
        Cmd='choco';
-       Paths=@((Join-Path $pd "chocolatey\bin\choco.exe"));
+       Paths=@((ReviewPCPath $pd "chocolatey\bin\choco.exe"));
        InstallMethod='Bootstrap (arch-agnostic; not used for ARM app installs)' },
 
     # --- Browsers ---
     @{ Id='chrome'; Name='Google Chrome'; Category='Browsers'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $pf "Google\Chrome\Application\chrome.exe"),
-               (Join-Path $pf86 "Google\Chrome\Application\chrome.exe"));
+       Paths=@((ReviewPCPath $pf "Google\Chrome\Application\chrome.exe"),
+               (ReviewPCPath $pf86 "Google\Chrome\Application\chrome.exe"));
        InstallMethod='winget Google.Chrome (native _arm64.msi)' },
     @{ Id='firefox'; Name='Mozilla Firefox'; Category='Browsers'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $pf "Mozilla Firefox\firefox.exe"),
-               (Join-Path $pf86 "Mozilla Firefox\firefox.exe"));
+       Paths=@((ReviewPCPath $pf "Mozilla Firefox\firefox.exe"),
+               (ReviewPCPath $pf86 "Mozilla Firefox\firefox.exe"));
        InstallMethod='winget Mozilla.Firefox (native arm64). Brought in as an additional native-ARM64 browser.' },
 
     # --- Dev tools ---
     @{ Id='git'; Name='Git'; Category='DevTools'; NativeExpected=$true;
        Cmd='git';
-       Paths=@((Join-Path $pf "Git\cmd\git.exe"),
-               (Join-Path $pf86 "Git\cmd\git.exe"),
-               (Join-Path $la "Programs\Git\cmd\git.exe"));
+       Paths=@((ReviewPCPath $pf "Git\cmd\git.exe"),
+               (ReviewPCPath $pf86 "Git\cmd\git.exe"),
+               (ReviewPCPath $la "Programs\Git\cmd\git.exe"));
        InstallMethod='winget Git.Git (native -arm64.exe)' },
     @{ Id='vscode'; Name='VS Code'; Category='DevTools'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $la "Programs\Microsoft VS Code\Code.exe"),
-               (Join-Path $pf "Microsoft VS Code\Code.exe"));
+       Paths=@((ReviewPCPath $la "Programs\Microsoft VS Code\Code.exe"),
+               (ReviewPCPath $pf "Microsoft VS Code\Code.exe"));
        InstallMethod='winget Microsoft.VisualStudioCode (native arm64 exe)' },
     @{ Id='python'; Name='Python 3.12'; Category='DevTools'; NativeExpected=$true;
        Cmd='python';
-       Paths=@((Join-Path $pf "Python312\python.exe"),
-               (Join-Path $la "Programs\Python\Python312\python.exe"));
+       Paths=@((ReviewPCPath $pf "Python312\python.exe"),
+               (ReviewPCPath $la "Programs\Python\Python312\python.exe"));
        InstallMethod='direct python-3.12.0-arm64.exe from python.org (InstallAllUsers -> Program Files)' },
     @{ Id='node'; Name='Node.js LTS'; Category='DevTools'; NativeExpected=$true;
        Cmd='node';
-       Paths=@((Join-Path $pf "nodejs\node.exe"),
-               (Join-Path $pf86 "nodejs\node.exe"));
+       Paths=@((ReviewPCPath $pf "nodejs\node.exe"),
+               (ReviewPCPath $pf86 "nodejs\node.exe"));
        InstallMethod='winget OpenJS.NodeJS.LTS (native arm64 MSI)' },
     @{ Id='vs2022'; Name='Visual Studio 2022'; Category='DevTools'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $pf "Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.exe"));
+       Paths=@((ReviewPCPath $pf "Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.exe"));
        InstallMethod='direct vs_Community.exe --arch arm64 (native ARM64 IDE since 17.4; some auxiliary workloads may still be emulated)' },
     @{ Id='uv'; Name='uv'; Category='DevTools'; NativeExpected=$true;
        Cmd='uv';
-       Paths=@((Join-Path $la "Microsoft\WinGet\Links\uv.exe"),
-               (Join-Path $la "Microsoft\WinGet\Packages\astral-sh.uv\uv.exe"),
-               (Join-Path "$env:USERPROFILE\.local\bin" "uv.exe"),
-               (Join-Path $la "Programs\uv\uv.exe"));
+       Paths=@((ReviewPCPath $la "Microsoft\WinGet\Links\uv.exe"),
+               (ReviewPCPath $la "Microsoft\WinGet\Packages\astral-sh.uv\uv.exe"),
+               (ReviewPCPath "$env:USERPROFILE\.local\bin" "uv.exe"),
+               (ReviewPCPath $la "Programs\uv\uv.exe"));
        InstallMethod='winget astral-sh.uv (native aarch64)' },
     @{ Id='miniconda'; Name='Miniconda3'; Category='DevTools'; NativeExpected=$false;
        WarnNote="No official native Windows-ARM64 Miniconda installer exists (verified: Miniconda3-latest-Windows-arm64.exe is HTTP 404; repo.anaconda.com/miniconda ships only Windows x86/x64). On ARM the official x86_64 Miniconda is installed and runs under x64 emulation. Prefer system ARM64 Python + uv/pip for new environments. Re-check Anaconda before relying on a native arm64 build.";
        Cmd='conda';
-       Paths=@((Join-Path $la "miniconda3\python.exe"),
-               (Join-Path $la "miniconda3\Scripts\conda.exe"));
+       Paths=@((ReviewPCPath $la "miniconda3\python.exe"),
+               (ReviewPCPath $la "miniconda3\Scripts\conda.exe"));
        InstallMethod='direct Miniconda3-latest-Windows-x86_64.exe (x64-emulated fallback - WARN)' },
 
     # --- AI tooling ---
     @{ Id='lmstudio'; Name='LM Studio'; Category='AITools'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $la "Programs\LM Studio\LM Studio.exe"));
+       Paths=@((ReviewPCPath $la "Programs\LM Studio\LM Studio.exe"));
        InstallMethod='winget ElementLabs.LMStudio (native -arm64.exe)' },
     @{ Id='ollama'; Name='Ollama'; Category='AITools'; NativeExpected=$true;
        Cmd='ollama';
-       Paths=@((Join-Path $la "Programs\Ollama\ollama.exe"));
+       Paths=@((ReviewPCPath $la "Programs\Ollama\ollama.exe"));
        InstallMethod='direct ollama-windows-arm64.zip from github latest (winget Ollama.Ollama is x64-only)' },
 
     # --- Benchmark / monitoring ---
     @{ Id='cpu-z'; Name='CPU-Z'; Category='Monitoring'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $pf "CPU-Z\cpuz_arm64.exe"),
-               (Join-Path $pf "CPU-Z\cpuz.exe"));
+       Paths=@((ReviewPCPath $pf "CPU-Z\cpuz_arm64.exe"),
+               (ReviewPCPath $pf "CPU-Z\cpuz.exe"));
        InstallMethod='direct cpuz-arm64_*.zip from download.cpuid.com (native ARM64 portable)' },
     @{ Id='hwmonitor'; Name='HWMonitor'; Category='Monitoring'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $pf "HWMonitor\hwmonitor_arm64.exe"),
-               (Join-Path $pf "HWMonitor\Hwmonitor.exe"));
+       Paths=@((ReviewPCPath $pf "HWMonitor\hwmonitor_arm64.exe"),
+               (ReviewPCPath $pf "HWMonitor\Hwmonitor.exe"));
        InstallMethod='direct hwmonitor-arm64_*.zip from download.cpuid.com (native ARM64 portable)' },
     @{ Id='crystaldiskmark'; Name='CrystalDiskMark'; Category='Monitoring'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $pf "CrystalDiskMark\DiskMark64.exe"),
-               (Join-Path $pf "CrystalDiskMark\CrystalDiskMark.exe"));
+       Paths=@((ReviewPCPath $pf "CrystalDiskMark\DiskMark64.exe"),
+               (ReviewPCPath $pf "CrystalDiskMark\CrystalDiskMark.exe"));
        InstallMethod='winget CrystalDewWorld.CrystalDiskMark (universal installer -> native arm64)' },
 
     # --- Media / productivity ---
     @{ Id='vlc'; Name='VLC'; Category='Media'; NativeExpected=$true;
        Cmd='vlc';
-       Paths=@((Join-Path $pf "VideoLAN\VLC\vlc.exe"),
-               (Join-Path $pf86 "VideoLAN\VLC\vlc.exe"));
+       Paths=@((ReviewPCPath $pf "VideoLAN\VLC\vlc.exe"),
+               (ReviewPCPath $pf86 "VideoLAN\VLC\vlc.exe"));
        InstallMethod='winget VideoLAN.VLC (native winarm64)' },
     @{ Id='7zip'; Name='7-Zip'; Category='Media'; NativeExpected=$true;
        Cmd='7z';
-       Paths=@((Join-Path $pf "7-Zip\7z.exe"),
-               (Join-Path $pf "7-Zip\7zFM.exe"));
+       Paths=@((ReviewPCPath $pf "7-Zip\7z.exe"),
+               (ReviewPCPath $pf "7-Zip\7zFM.exe"));
        InstallMethod='winget 7zip.7zip (native arm64). Brought in as an additional native-ARM64 archive tool.' },
 
     # --- Utilities ---
     @{ Id='notepadpp'; Name='Notepad++'; Category='Utilities'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $pf "Notepad++\notepad++.exe"),
-               (Join-Path $pf86 "Notepad++\notepad++.exe"));
+       Paths=@((ReviewPCPath $pf "Notepad++\notepad++.exe"),
+               (ReviewPCPath $pf86 "Notepad++\notepad++.exe"));
        InstallMethod='winget Notepad++.Notepad++ (native .Installer.arm64.exe)' },
     @{ Id='powertoys'; Name='PowerToys'; Category='Utilities'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((Join-Path $la "Microsoft\PowerToys\PowerToys.exe"));
+       Paths=@((ReviewPCPath $la "Microsoft\PowerToys\PowerToys.exe"));
        InstallMethod='winget Microsoft.PowerToys (native -arm64.exe)' },
     @{ Id='terminal'; Name='Windows Terminal'; Category='Utilities'; NativeExpected=$true;
        Cmd='wt';
-       Paths=@((Join-Path $la "Microsoft\WindowsApps\wt.exe"),
-               (Join-Path $la "Microsoft\WindowsApps\WindowsTerminal.exe"));
+       Paths=@((ReviewPCPath $la "Microsoft\WindowsApps\wt.exe"),
+               (ReviewPCPath $la "Microsoft\WindowsApps\WindowsTerminal.exe"));
        InstallMethod='winget Microsoft.WindowsTerminal (multi-arch MSIX - native arm64)' },
 
     # --- Windows feature / platform add-ons (native-ARM, justified for a review PC) ---
     @{ Id='wsl'; Name='WSL'; Category='Platform'; NativeExpected=$true;
        Cmd='wsl';
-       Paths=@((Join-Path $env:SystemRoot "System32\wsl.exe"),
-               (Join-Path $env:SystemRoot "System32\wslapi.dll"));
+       Paths=@((ReviewPCPath $env:SystemRoot "System32\wsl.exe"),
+               (ReviewPCPath $env:SystemRoot "System32\wslapi.dll"));
        InstallMethod='wsl --install (Windows Subsystem for Linux feature - native ARM64). Enables a Linux userland on WoA.' },
     @{ Id='openssh'; Name='OpenSSH Client'; Category='Platform'; NativeExpected=$true;
        Cmd='ssh';
-       Paths=@((Join-Path $env:SystemRoot "System32\OpenSSH\ssh.exe"));
+       Paths=@((ReviewPCPath $env:SystemRoot "System32\OpenSSH\ssh.exe"));
        InstallMethod='Add-WindowsCapability OpenSSH.Client (ships native ARM64 binaries in System32)' },
     @{ Id='docker'; Name='Docker Desktop'; Category='Platform'; NativeExpected=$false;
        WarnNote="Docker Desktop ships a native ARM64 build (winget Docker.DockerDesktop), but it requires a WSL2/Hyper-V backend. It is installed ONLY when the bootstrap explicitly opts in (-InstallDocker); otherwise it is documented as an emulated/opt-in capability and NOT a failure.";
        Cmd=$null;
-       Paths=@((Join-Path $pf "Docker\Docker\Docker Desktop.exe"));
+       Paths=@((ReviewPCPath $pf "Docker\Docker\Docker Desktop.exe"));
        InstallMethod='winget Docker.DockerDesktop (native ARM64, opt-in)' }
   )
 }
