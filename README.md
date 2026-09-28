@@ -26,7 +26,6 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 ### Optional Parameters
 - `-SysprepMode` - Apply debloat to Default profile (affects new users)
 - `-Silent` - Hide debloat prompts (default: true)
-- `-InstallDocker` - Also install Docker Desktop (native ARM64, requires a WSL2 backend)
 - `-SkipAudit` - Do not run the post-install ARM64 audit at the end
 
 ### Individual Scripts
@@ -53,7 +52,7 @@ Each component can be run independently:
 - **Browsers:** Google Chrome
 - **Dev Tools:** Git, VS Code, Python 3.12, Node.js LTS, Visual Studio 2022 Community, uv, Miniconda3
 - **AI Tools:** LM Studio, Ollama
-- **Utilities:** 7-Zip, CPU-Z, HWMonitor, CrystalDiskMark, VLC, Notepad++, PowerToys, Windows Terminal
+- **Utilities:** CPU-Z, HWMonitor, CrystalDiskMark, VLC, Notepad++, PowerToys, Windows Terminal
 
 ### What Gets Configured
 - Chrome set as default browser
@@ -93,32 +92,27 @@ On an **x64** host behavior is **unchanged** (everything still installs via Choc
 |-----|-----------------|---------|
 | Chocolatey | Bootstrapped only (arch-agnostic); **not** used for ARM app installs | emulated (WARN) |
 | Google Chrome | winget `Google.Chrome` (native `_arm64.msi`) | native |
-| Mozilla Firefox | winget `Mozilla.Firefox` (native arm64) — brought in on ARM | native |
 | Git | winget `Git.Git` (native `-arm64.exe`) | native |
 | VS Code | winget `Microsoft.VisualStudioCode` (native arm64) | native |
 | Python 3.12.0 | direct `python-3.12.0-arm64.exe` from python.org (HTTP-verified) | native |
 | Node.js LTS | winget `OpenJS.NodeJS.LTS` (native arm64 MSI) | native |
-| Visual Studio 2022 Community | direct `vs_Community.exe --arch arm64` bootstrapper; **native ARM64 IDE since 17.4** (some auxiliary workloads still emulated) | native |
+| Visual Studio 2022 Community | direct `vs_Community.exe` bootstrapper (auto-selects ARM64); **native ARM64 IDE since 17.4** (some auxiliary workloads still emulated) | native |
 | uv | winget `astral-sh.uv` (native aarch64) | native |
 | Miniconda3 | official **x86_64** Miniconda (runs under x64 emulation) — **no native arm64 installer exists** | emulated (WARN) |
 | LM Studio | winget `ElementLabs.LMStudio` (native `-arm64.exe`) | native |
-| Ollama | direct `ollama-windows-arm64.zip` from GitHub **latest** release (winget's `Ollama.Ollama` is x64-only) | native |
+| Ollama | direct `ollama-windows-arm64.zip` from GitHub **latest** release (winget's `Ollama.Ollama` is x64-only); `ollama serve` is started and an **Ollama Serve** logon task is registered | native |
 | CPU-Z | direct `download.cpuid.com/.../cpuz-arm64_1.05.zip` (native ARM64 portable) | native |
 | HWMonitor | direct `download.cpuid.com/.../hwmonitor-arm64_1.05.zip` (native ARM64 portable) | native |
 | CrystalDiskMark | winget `CrystalDewWorld.CrystalDiskMark` (universal installer → native arm64) | native |
 | VLC | winget `VideoLAN.VLC` (native winarm64) | native |
-| 7-Zip | winget `7zip.7zip` (native arm64) — brought in on ARM | native |
 | Notepad++ | winget `Notepad++.Notepad++` (native `.Installer.arm64.exe`) | native |
 | PowerToys | winget `Microsoft.PowerToys` (native `-arm64.exe`) | native |
 | Windows Terminal | winget `Microsoft.WindowsTerminal` (multi-arch MSIX) | native |
-| WSL | `wsl --install` (Windows feature; native ARM64) — enabled on ARM | native |
-| OpenSSH Client | `Add-WindowsCapability OpenSSH.Client` (native ARM64 in System32) | native |
-| Docker Desktop | winget `Docker.DockerDesktop` (native ARM64) — **opt-in** via `-InstallDocker`, needs WSL2 | native (opt-in) |
 
-> **Switching back to x64:** just use `main`. The `arm64v2` branch only changes install behavior on ARM64 hosts.
+> **x64 hosts:** the x64 path installs exactly the same apps as `main`. This branch only changes install behavior on ARM64 hosts, so it can be merged into `main`.
 
 ### Caveats
-- **Visual Studio 2022 is now a NATIVE ARM64 app** (since 17.4). `--arch arm64` installs the native ARM64 IDE + build toolchain. A few legacy/auxiliary workloads can still fall back to emulation; the auditor expects a native `devenv.exe` (PASS) and treats any residual emulated component as informational. The minimal `--add Microsoft.VisualStudio.Workload.CoreEditor` is installed; extend with extra `--add ...` flags (e.g. `Microsoft.VisualStudio.Workload.NativeDesktop`) if needed.
+- **Visual Studio 2022 is now a NATIVE ARM64 app** (since 17.4). On an ARM64 host the bootstrapper installs the native ARM64 IDE + build toolchain automatically (`--arch` is a layout-only option and is not passed). A few legacy/auxiliary workloads can still fall back to emulation; the auditor expects a native `devenv.exe` (PASS) and treats any residual emulated component as informational. The minimal `--add Microsoft.VisualStudio.Workload.CoreEditor` is installed; extend with extra `--add ...` flags (e.g. `Microsoft.VisualStudio.Workload.NativeDesktop`) if needed.
 - **Miniconda3 has NO native Windows-ARM64 installer** (verified: `Miniconda3-latest-Windows-arm64.exe` is HTTP 404; repo.anaconda.com/miniconda ships only Windows x86/x64). It is installed as the official **x86_64** build under x64 emulation and is a documented **WARN**, never a FAIL. Prefer the system **ARM64 Python + uv/pip** for new environments. Re-check Anaconda before relying on a native arm64 build.
 - **Chocolatey has no native ARM64 build** and runs under x64 emulation. On ARM it is bootstrapped (harmless) but **bypassed** for all app installs — this is the core of the arm64v2 design.
 - **Ollama** is installed from GitHub releases as `ollama-windows-arm64.zip` (native ARM64). Do **not** use winget `Ollama.Ollama` on ARM — its manifest only ships an x64 `OllamaSetup.exe`.
@@ -131,7 +125,7 @@ On an **x64** host behavior is **unchanged** (everything still installs via Choc
 
 It reads the COFF/PE machine word of each primary executable:
 - **PASS** = present AND PE machine `0xAA64` (ARM64), or a Windows Terminal MSIX reparse point (native multi-arch).
-- **WARN** = present but emulated / no native ARM64 upstream (Miniconda3, Chocolatey, opted-out Docker) — never a failure.
+- **WARN** = present but emulated / no native ARM64 upstream (Miniconda3, Chocolatey) — never a failure.
 - **FAIL** = missing, or expected-native but found x64/x86/ARMv7. **The script exits non-zero if any item FAILs.**
 
 It uses the **same** catalog and arch detection as the installer (`Common.Utils.ps1`), so expectations can't drift.

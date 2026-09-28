@@ -13,8 +13,8 @@
    * Classifies each app from the catalog:
        NativeExpected=$true  -> binary missing OR PE machine != 0xAA64 (ARM64)
                                 is a FAIL.
-       NativeExpected=$false -> no native ARM64 build upstream (Miniconda,
-                                Chocolatey, or opted-out Docker); presence /
+       NativeExpected=$false -> no native ARM64 build upstream (Miniconda
+                                or Chocolatey); presence /
                                 emulated arch is a documented WARN, never FAIL.
    * Supports Live (default; requires an ARM64 host) and DryRun (docs/path
      check, runs on ANY machine including an x64 host).
@@ -32,7 +32,7 @@
    [PASS] exe found AND PE machine type is ARM64 (0xAA64), OR the app is a
           Windows Terminal MSIX reparse point (native multi-arch MSIX).
    [WARN] exe found but documented as emulated / no native ARM64 upstream
-          (Miniconda3, Chocolatey, Docker-when-opted-out). Never fails.
+          (Miniconda3, Chocolatey). Never fails.
    [FAIL] exe NOT found (install likely failed / wrong path), OR found but is
           x64 (0x8664) / x86 (0x14c) / ARMv7 (0x1c4) where a NATIVE ARM64
           build should have been installed.
@@ -178,7 +178,7 @@ if ($completenessFails -gt 0) {
 if ($Mode -eq 'DryRun') {
   Write-Host "`n[DryRun] Documentation / path check. No ARM64 host required."
   Write-Host "This script locates each exe and reads its PE machine type; the"
-  Write-Host "documented WARN items (Miniconda3, Chocolatey, opted-out Docker)"
+  Write-Host "documented WARN items (Miniconda3, Chocolatey)"
   Write-Host "have no native ARM64 build upstream.`n"
   foreach ($i in $Items) {
     Write-Host "  [$($i.Id)] $($i.Name)  (NativeExpected=$($i.NativeExpected), method: $($i.InstallMethod))"
@@ -218,26 +218,6 @@ foreach ($i in $Items) {
   if ($i.Id -eq 'terminal' -and $exePath -and -not (Get-PEMachineType $exePath)) {
     $results += @{ Id=$i.Id; Name=$name; Verdict='PASS'; Arch='ARM64(MSIX)'; Path=$exePath }
     Write-Host "[PASS] $name ARM64(MSIX) $exePath" -ForegroundColor Green
-    continue
-  }
-
-  # WSL check: wsl.exe exists in System32 (native); also confirm the WSL
-  # optional component is actually enabled so the userland is usable.
-  if ($i.Id -eq 'wsl' -and -not $exePath) {
-    # Sometimes wsl.exe is present but WSL components not enabled.
-    $wslState = & wsl --status 2>$null
-    $enabled = ($LASTEXITCODE -eq 0) -or ($wslState -match 'Default Distribution|WSL version|no installed')
-    if (-not $exePath -and -not $enabled) {
-      # Not truly installed - but only warn, since enabling requires a reboot.
-      $results += @{ Id=$i.Id; Name=$name; Verdict='WARN'; Arch='WSL-not-enabled'; Path='' }
-      Write-Host "[WARN] $name wsl.exe present but WSL not fully enabled (may require reboot)" -ForegroundColor Yellow
-      continue
-    }
-  }
-  # Docker: when not opted-in, the binary is legitimately absent - document as WARN.
-  if ($i.Id -eq 'docker' -and -not $exePath) {
-    $results += @{ Id=$i.Id; Name=$name; Verdict='WARN'; Arch='not-installed(opt-in)'; Path='' }
-    Write-Host "[WARN] $name not installed (Docker Desktop is opt-in via -InstallDocker; requires WSL2)" -ForegroundColor Yellow
     continue
   }
 
@@ -291,7 +271,7 @@ Write-Host "`n================= SUMMARY ================="
 $pass = ($results | Where-Object Verdict -eq 'PASS').Count
 $warn = ($results | Where-Object Verdict -eq 'WARN').Count
 Write-Host ("PASS: " + $pass + "  WARN: " + $warn + "  FAIL: " + $fail)
-Write-Host "WARN items (Miniconda3, Chocolatey, opt-out Docker) have no native"
+Write-Host "WARN items (Miniconda3, Chocolatey) have no native"
 Write-Host "ARM64 build upstream and intentionally run emulated; they are not failures."
 if (($fail -gt 0) -or ($completenessFails -gt 0)) {
   if ($fail -gt 0) {

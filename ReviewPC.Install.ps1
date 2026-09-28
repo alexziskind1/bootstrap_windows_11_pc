@@ -19,8 +19,7 @@
 [CmdletBinding()]
 param(
   [string]$GitUserName,
-  [string]$GitUserEmail,
-  [switch]$InstallDocker
+  [string]$GitUserEmail
 )
 
 $ScriptRoot = Split-Path -Parent $PSCommandPath
@@ -81,7 +80,7 @@ if (-not $IsArm64) {
 
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing browsers..." -ForegroundColor Cyan
   Install-ReviewPCPackage -PackageName "googlechrome" -ExtraArgs "--ignore-checksums"
-  # Firefox (native arm64 available, but keep as opted-out on x64 to mirror original choco set)
+  # Install-ReviewPCPackage -PackageName "firefox"
 
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing dev tools..." -ForegroundColor Cyan
   Install-ReviewPCPackage -PackageName "git"
@@ -93,17 +92,22 @@ if (-not $IsArm64) {
   Install-ReviewPCPackage -PackageName "miniconda3"
 
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing AI tooling..." -ForegroundColor Cyan
-  Install-ReviewPCPackage -PackageName "lm-studio"
-  Install-ReviewPCPackage -PackageName "ollama"
+  # LM Studio (desktop app)
+  Install-ReviewPCPackage -PackageName "lm-studio"     # package id: lm-studio
+  # Ollama (CLI + service)
+  Install-ReviewPCPackage -PackageName "ollama"        # package id: ollama
 
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing benchmarks/monitoring..." -ForegroundColor Cyan
   choco install cpu-z
   choco install hwmonitor
   choco install crystaldiskmark
+  # Cinebench isn't reliably packaged; install manually if needed
+  # choco install cinebench
 
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing media/productivity..." -ForegroundColor Cyan
-  Install-ReviewPCPackage -PackageName "7zip"
+  # Install-ReviewPCPackage -PackageName "obs-studio"
   Install-ReviewPCPackage -PackageName "vlc"
+  # Install-ReviewPCPackage -PackageName "7zip"
 
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing utilities..." -ForegroundColor Cyan
   Install-ReviewPCPackage -PackageName "notepadplusplus"
@@ -120,8 +124,7 @@ else {
   # --- 2) Browsers ---
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Installing browsers..." -ForegroundColor Cyan
   $Results += @{ Id='chrome'; Ok=(Install-ReviewPCWinget -PackageId "Google.Chrome") }
-  # Firefox ships a NATIVE ARM64 build -> bring it in on ARM (was commented out on both).
-  $Results += @{ Id='firefox'; Ok=(Install-ReviewPCWinget -PackageId "Mozilla.Firefox") }
+  # Install-ReviewPCWinget -PackageId "Mozilla.Firefox"   # firefox (commented out, as on x64)
 
   # --- 3) Dev tools ---
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Installing dev tools..." -ForegroundColor Cyan
@@ -135,15 +138,16 @@ else {
                         -SilentArgs "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0") }
   # Node.js LTS - native arm64 MSI.
   $Results += @{ Id='node'; Ok=(Install-ReviewPCWinget -PackageId "OpenJS.NodeJS.LTS") }
-  # Visual Studio 2022 Community - vs_Community.exe --arch arm64. Since VS 2022
-  # 17.4 the IDE is a native ARM64 app; some auxiliary workloads still run
-  # emulated (documented in the auditor). Installed with a minimal core editor;
-  # extend with extra --add flags as needed.
+  # Visual Studio 2022 Community. Since VS 2022 17.4 the IDE is a native ARM64
+  # app, and the bootstrapper picks the ARM64 build itself on an ARM64 host
+  # (--arch is a layout-only parameter, not valid for an install). Some
+  # auxiliary workloads still run emulated. Installed with a minimal core
+  # editor; extend with extra --add flags as needed.
   $Results += @{ Id='vs2022'; Ok=(Install-ReviewPCDownloadAndRun `
                         -Url "https://aka.ms/vs/17/release/vs_community.exe" `
                         -FileName "vs_Community.exe" `
                         -ExpectedSizeMB 3 `
-                        -SilentArgs "--quiet --wait --norestart --arch arm64 --add Microsoft.VisualStudio.Workload.CoreEditor") }
+                        -SilentArgs "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.CoreEditor") }
   # uv - native aarch64.
   $Results += @{ Id='uv'; Ok=(Install-ReviewPCWinget -PackageId "astral-sh.uv") }
   # Miniconda3 - documented WARN: no native Windows-ARM64 installer exists
@@ -181,44 +185,15 @@ else {
 
   # --- 6) Media / productivity ---
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Installing media/productivity..." -ForegroundColor Cyan
-  # 7-Zip ships a NATIVE ARM64 build -> bring it in on ARM (was commented out).
-  $Results += @{ Id='7zip'; Ok=(Install-ReviewPCWinget -PackageId "7zip.7zip") }
+  # Install-ReviewPCWinget -PackageId "OBSProject.OBSStudio"   # obs-studio (commented out, as on x64)
   $Results += @{ Id='vlc';  Ok=(Install-ReviewPCWinget -PackageId "VideoLAN.VLC") }
+  # Install-ReviewPCWinget -PackageId "7zip.7zip"              # 7-Zip (commented out, as on x64)
 
   # --- 7) Utilities ---
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Installing utilities..." -ForegroundColor Cyan
   $Results += @{ Id='notepadpp'; Ok=(Install-ReviewPCWinget -PackageId "Notepad++.Notepad++") }
   $Results += @{ Id='powertoys';  Ok=(Install-ReviewPCWinget -PackageId "Microsoft.PowerToys") }
   $Results += @{ Id='terminal';   Ok=(Install-ReviewPCWinget -PackageId "Microsoft.WindowsTerminal") }
-
-  # --- 8) Platform / WoA add-ons (native ARM) ---
-  Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Installing platform add-ons..." -ForegroundColor Cyan
-  # WSL - Windows feature, native ARM64; very popular on WoA.
-  $wslOk = $true
-  if (-not (Get-Command wsl -ErrorAction SilentlyContinue)) {
-    Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Enabling WSL (native ARM64)..." -ForegroundColor Cyan
-    & wsl --install --no-distribution | Out-Null
-    $wslOk = ($LASTEXITCODE -eq 0 -or (Get-Command wsl -ErrorAction SilentlyContinue))
-  }
-  $Results += @{ Id='wsl'; Ok=$wslOk }
-  # OpenSSH Client - Windows capability; ships native ARM64 binaries.
-  $sshOk = (Get-Command ssh -ErrorAction SilentlyContinue) -ne $null
-  if (-not $sshOk) {
-    Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installing OpenSSH.Client capability..." -ForegroundColor Cyan
-    try {
-      Add-WindowsCapability -Online -Name "OpenSSH.Client~~~~0.0.1.0" -ErrorAction Stop | Out-Null
-      $sshOk = (Get-Command ssh -ErrorAction SilentlyContinue) -ne $null
-    } catch {
-      Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: OpenSSH.Client install issue: $($_.Exception.Message)" -ForegroundColor Yellow
-    }
-  }
-  $Results += @{ Id='openssh'; Ok=$sshOk }
-  # Docker Desktop - native ARM64 but needs WSL2/Hyper-V backend; OPT-IN only.
-  if ($InstallDocker) {
-    $Results += @{ Id='docker'; Ok=(Install-ReviewPCWinget -PackageId "Docker.DockerDesktop") }
-  } else {
-    Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Docker Desktop NOT installed (opt-in via -InstallDocker; requires WSL2 backend)." -ForegroundColor DarkGray
-  }
 
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - All ARM64 app installs requested." -ForegroundColor Green
 }

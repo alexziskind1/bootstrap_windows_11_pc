@@ -288,11 +288,6 @@ function Get-ReviewPCAppCatalog {
        Paths=@((ReviewPCPath $pf "Google\Chrome\Application\chrome.exe"),
                (ReviewPCPath $pf86 "Google\Chrome\Application\chrome.exe"));
        InstallMethod='winget Google.Chrome (native _arm64.msi)' },
-    @{ Id='firefox'; Name='Mozilla Firefox'; Category='Browsers'; NativeExpected=$true;
-       Cmd=$null;
-       Paths=@((ReviewPCPath $pf "Mozilla Firefox\firefox.exe"),
-               (ReviewPCPath $pf86 "Mozilla Firefox\firefox.exe"));
-       InstallMethod='winget Mozilla.Firefox (native arm64). Brought in as an additional native-ARM64 browser.' },
 
     # --- Dev tools ---
     @{ Id='git'; Name='Git'; Category='DevTools'; NativeExpected=$true;
@@ -319,7 +314,7 @@ function Get-ReviewPCAppCatalog {
     @{ Id='vs2022'; Name='Visual Studio 2022'; Category='DevTools'; NativeExpected=$true;
        Cmd=$null;
        Paths=@((ReviewPCPath $pf "Microsoft Visual Studio\2022\Community\Common7\IDE\devenv.exe"));
-       InstallMethod='direct vs_Community.exe --arch arm64 (native ARM64 IDE since 17.4; some auxiliary workloads may still be emulated)' },
+       InstallMethod='direct vs_Community.exe bootstrapper (selects the native ARM64 IDE on an ARM64 host since 17.4; some auxiliary workloads may still be emulated)' },
     @{ Id='uv'; Name='uv'; Category='DevTools'; NativeExpected=$true;
        Cmd='uv';
        Paths=@((ReviewPCPath $la "Microsoft\WinGet\Links\uv.exe"),
@@ -367,11 +362,6 @@ function Get-ReviewPCAppCatalog {
        Paths=@((ReviewPCPath $pf "VideoLAN\VLC\vlc.exe"),
                (ReviewPCPath $pf86 "VideoLAN\VLC\vlc.exe"));
        InstallMethod='winget VideoLAN.VLC (native winarm64)' },
-    @{ Id='7zip'; Name='7-Zip'; Category='Media'; NativeExpected=$true;
-       Cmd='7z';
-       Paths=@((ReviewPCPath $pf "7-Zip\7z.exe"),
-               (ReviewPCPath $pf "7-Zip\7zFM.exe"));
-       InstallMethod='winget 7zip.7zip (native arm64). Brought in as an additional native-ARM64 archive tool.' },
 
     # --- Utilities ---
     @{ Id='notepadpp'; Name='Notepad++'; Category='Utilities'; NativeExpected=$true;
@@ -387,23 +377,7 @@ function Get-ReviewPCAppCatalog {
        Cmd='wt';
        Paths=@((ReviewPCPath $la "Microsoft\WindowsApps\wt.exe"),
                (ReviewPCPath $la "Microsoft\WindowsApps\WindowsTerminal.exe"));
-       InstallMethod='winget Microsoft.WindowsTerminal (multi-arch MSIX - native arm64)' },
-
-    # --- Windows feature / platform add-ons (native-ARM, justified for a review PC) ---
-    @{ Id='wsl'; Name='WSL'; Category='Platform'; NativeExpected=$true;
-       Cmd='wsl';
-       Paths=@((ReviewPCPath $env:SystemRoot "System32\wsl.exe"),
-               (ReviewPCPath $env:SystemRoot "System32\wslapi.dll"));
-       InstallMethod='wsl --install (Windows Subsystem for Linux feature - native ARM64). Enables a Linux userland on WoA.' },
-    @{ Id='openssh'; Name='OpenSSH Client'; Category='Platform'; NativeExpected=$true;
-       Cmd='ssh';
-       Paths=@((ReviewPCPath $env:SystemRoot "System32\OpenSSH\ssh.exe"));
-       InstallMethod='Add-WindowsCapability OpenSSH.Client (ships native ARM64 binaries in System32)' },
-    @{ Id='docker'; Name='Docker Desktop'; Category='Platform'; NativeExpected=$false;
-       WarnNote="Docker Desktop ships a native ARM64 build (winget Docker.DockerDesktop), but it requires a WSL2/Hyper-V backend. It is installed ONLY when the bootstrap explicitly opts in (-InstallDocker); otherwise it is documented as an emulated/opt-in capability and NOT a failure.";
-       Cmd=$null;
-       Paths=@((ReviewPCPath $pf "Docker\Docker\Docker Desktop.exe"));
-       InstallMethod='winget Docker.DockerDesktop (native ARM64, opt-in)' }
+       InstallMethod='winget Microsoft.WindowsTerminal (multi-arch MSIX - native arm64)' }
   )
 }
 
@@ -467,7 +441,10 @@ function Install-ReviewPCWinget {
   while ($attempts -lt 3) {
     $attempts++
     try {
-      & winget @wingetArgs
+      # Out-Host keeps winget's console output off this function's output
+      # stream; otherwise it becomes part of the return value and a failed
+      # install reads as truthy to the caller.
+      & winget @wingetArgs | Out-Host
       $code = $LASTEXITCODE
       $present = Test-ReviewPCWingetList $PackageId
       if ($code -eq 0 -or $present -or ($ALREADY_INSTALLED_CODES -contains $code)) {
@@ -683,14 +660,32 @@ function Install-ReviewPCOllamaArm64 {
       Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Added $InstallDir to user PATH." -ForegroundColor Green
     }
 
-    # Launch ollama.exe once so it self-registers the Ollama service
+    # The arm64 zip ships only ollama.exe + lib\ (no tray app, no service).
+    # Running ollama.exe with no command just prints help, so start the server
+    # explicitly now and register a logon task so it starts on every sign-in.
     $ollamaExe = Join-Path $InstallDir "ollama.exe"
-    if (Test-Path $ollamaExe) {
-      Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Launching $ollamaExe to register the Ollama service..."
-      Start-Process -FilePath $ollamaExe -WindowStyle Hidden
-    } else {
+    if (-not (Test-Path $ollamaExe)) {
       Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: $ollamaExe not found after extraction." -ForegroundColor Yellow
       return $false
+    }
+    Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Starting 'ollama serve'..."
+    Start-Process -FilePath $ollamaExe -ArgumentList "serve" -WindowStyle Hidden
+    try {
+      $user = "$env:USERDOMAIN\$env:USERNAME"
+      $launch = "Start-Process -FilePath '$ollamaExe' -ArgumentList 'serve' -WindowStyle Hidden"
+      $action = New-ScheduledTaskAction -Execute "powershell.exe" `
+                  -Argument "-NoProfile -WindowStyle Hidden -Command `"$launch`""
+      $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
+      $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+      $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+                    -ExecutionTimeLimit ([TimeSpan]::Zero)
+      # Out-Null: Register-ScheduledTask emits the task object, which would
+      # otherwise leak into this function's return value.
+      Register-ScheduledTask -TaskName "Ollama Serve" -Action $action -Trigger $trigger `
+        -Principal $principal -Settings $settings -Force | Out-Null
+      Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Registered 'Ollama Serve' logon task for $user." -ForegroundColor Green
+    } catch {
+      Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: could not register the Ollama logon task: $($_.Exception.Message). Run 'ollama serve' manually after sign-in." -ForegroundColor Yellow
     }
     Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Ollama ARM64 install complete." -ForegroundColor Green
     return $true

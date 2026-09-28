@@ -16,14 +16,12 @@
   Optional switches:
     -SysprepMode   => apply debloat to Default profile (affects NEW users) in addition to current user
     -Silent        => hides debloat prompts (default on)
-    -InstallDocker => also install Docker Desktop (native ARM64, needs WSL2 backend)
     -SkipAudit     => do not run the post-install ARM64 audit at the end
 #>
 
 param(
   [switch]$SysprepMode,
   [switch]$Silent = $true,
-  [switch]$InstallDocker,
   [switch]$SkipAudit
 )
 
@@ -100,7 +98,6 @@ try {
   $installArgs = @()
   if ($GitConfig.UserName) { $installArgs += "-GitUserName"; $installArgs += $GitConfig.UserName }
   if ($GitConfig.UserEmail) { $installArgs += "-GitUserEmail"; $installArgs += $GitConfig.UserEmail }
-  if ($InstallDocker) { $installArgs += "-InstallDocker" }
   Invoke-ReviewPCScript -ScriptPath $InstallScript -ScriptName "App Installation" -Arguments $installArgs
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - App Installation completed." -ForegroundColor Green
 
