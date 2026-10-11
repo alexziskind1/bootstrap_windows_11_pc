@@ -51,7 +51,6 @@ Clear-ReviewPCTaskbarPins -ScriptPrefix "Finish"
 
 # Resolve common .lnk targets
 $ChromeLnk    = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
-$VSCodeLnk    = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Visual Studio Code.lnk"
 $TerminalLnk  = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Windows Terminal.lnk"
 
 # Visual Studio link can live in a few places
@@ -62,6 +61,16 @@ $VStudioCandidates = @(
 )
 $VStudioLnk = $null
 foreach ($c in $VStudioCandidates) { if (Test-Path $c) { $VStudioLnk = $c; break } }
+
+# VS Code's shortcut sits in its own folder: per-machine installs use the
+# all-users Start Menu, the per-user installer (winget's default) the user's.
+$VSCodeCandidates = @(
+  "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Visual Studio Code\Visual Studio Code.lnk",
+  "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Visual Studio Code\Visual Studio Code.lnk",
+  "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Visual Studio Code.lnk"
+)
+$VSCodeLnk = $null
+foreach ($c in $VSCodeCandidates) { if (Test-Path $c) { $VSCodeLnk = $c; break } }
 
 # On Windows-on-ARM the apps install to the SAME Start-Menu locations as x64
 # (Program Files / LocalAppData), but the ARM code path uses winget/direct

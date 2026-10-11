@@ -143,7 +143,9 @@ function Test-ReviewPCCatalogComplete {
     Write-Host "[FAIL][completeness] Get-ReviewPCAppCatalog returned ZERO entries. The audit surface is empty - an editor likely dropped the catalog." -ForegroundColor Red
     return 1
   }
-  $dup = $list | Group-Object Id | Where-Object { $_.Count -gt 1 }
+  # Script block, not a property name: Windows PowerShell 5.1 does not read
+  # hashtable keys as properties here and would group every entry under ''.
+  $dup = $list | Group-Object { $_.Id } | Where-Object { $_.Count -gt 1 }
   if ($dup) {
     foreach ($g in $dup) {
       Write-Host "[FAIL][completeness] Duplicate catalog Id '$($g.Name)' ($($g.Count) entries). Ids must be unique." -ForegroundColor Red

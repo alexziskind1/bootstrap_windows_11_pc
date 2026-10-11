@@ -179,17 +179,16 @@ function Invoke-ReviewPCScript {
   param(
     [Parameter(Mandatory)][string]$ScriptPath,
     [string]$ScriptName = (Split-Path -Leaf $ScriptPath),
-    [string[]]$Arguments = @()
+    # Named parameters for the script, splatted: @{ GitUserName = '...' },
+    # @{ Silent = $true }. (An array cannot carry parameter names - passed
+    # as-is it binds whole to the first positional parameter.)
+    [hashtable]$Arguments = @{}
   )
 
   if (Test-ReviewPCPath $ScriptPath) {
     Write-Host "[RunAll] Running $ScriptName..." -ForegroundColor Cyan
     try {
-      if ($Arguments.Count -gt 0) {
-        & $ScriptPath $Arguments
-      } else {
-        & $ScriptPath
-      }
+      & $ScriptPath @Arguments
       Write-Host "[RunAll] $ScriptName completed." -ForegroundColor Green
       return $true
     } catch {
@@ -419,7 +418,10 @@ function Resolve-ReviewPCAppPath {
   }
   if ($App.Cmd) {
     $cmd = Get-Command $App.Cmd -ErrorAction SilentlyContinue
-    if ($cmd -and $cmd.Source -and (Test-Path -LiteralPath $cmd.Source)) {
+    # WindowsApps holds Store alias stubs (python.exe) that exist whether or
+    # not the app is installed; real MSIX aliases are listed in Paths instead.
+    if ($cmd -and $cmd.Source -and (Test-Path -LiteralPath $cmd.Source) -and
+        $cmd.Source -notlike '*\Microsoft\WindowsApps\*') {
       return $cmd.Source
     }
   }

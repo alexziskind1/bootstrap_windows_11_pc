@@ -79,9 +79,8 @@ try {
   # 1) Run Win11Debloat (SAFE FLAGS)
   # ---------------------------
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running Win11 Debloat..." -ForegroundColor Cyan
-  $debloatArgs = @()
-  if ($SysprepMode) { $debloatArgs += "-SysprepMode" }
-  if ($Silent) { $debloatArgs += "-Silent" }
+  $debloatArgs = @{ Silent = [bool]$Silent }
+  if ($SysprepMode) { $debloatArgs.SysprepMode = $true }
   
   Invoke-ReviewPCScript -ScriptPath $DebloatScript -ScriptName "Win11Debloat" -Arguments $debloatArgs
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Win11 Debloat completed." -ForegroundColor Green
@@ -97,9 +96,9 @@ try {
   # 3) Install applications
   # ---------------------------
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running App Installation..." -ForegroundColor Cyan
-  $installArgs = @()
-  if ($GitConfig.UserName) { $installArgs += "-GitUserName"; $installArgs += $GitConfig.UserName }
-  if ($GitConfig.UserEmail) { $installArgs += "-GitUserEmail"; $installArgs += $GitConfig.UserEmail }
+  $installArgs = @{}
+  if ($GitConfig.UserName) { $installArgs.GitUserName = $GitConfig.UserName }
+  if ($GitConfig.UserEmail) { $installArgs.GitUserEmail = $GitConfig.UserEmail }
   Invoke-ReviewPCScript -ScriptPath $InstallScript -ScriptName "App Installation" -Arguments $installArgs
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - App Installation completed." -ForegroundColor Green
 
@@ -107,9 +106,9 @@ try {
   # 4) Finish setup (Chrome default, pins, notifications, tweaks)
   # ---------------------------
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running Finish Setup..." -ForegroundColor Cyan
-  $finishArgs = @()
-  if ($GitConfig.UserName) { $finishArgs += "-GitUserName"; $finishArgs += $GitConfig.UserName }
-  if ($GitConfig.UserEmail) { $finishArgs += "-GitUserEmail"; $finishArgs += $GitConfig.UserEmail }
+  $finishArgs = @{}
+  if ($GitConfig.UserName) { $finishArgs.GitUserName = $GitConfig.UserName }
+  if ($GitConfig.UserEmail) { $finishArgs.GitUserEmail = $GitConfig.UserEmail }
   Invoke-ReviewPCScript -ScriptPath $FinishScript -ScriptName "Finish Setup" -Arguments $finishArgs
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Finish Setup completed." -ForegroundColor Green
 
