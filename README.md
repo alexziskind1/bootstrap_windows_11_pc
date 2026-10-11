@@ -1,11 +1,11 @@
 # ReviewPC Bootstrap Scripts
 
-A modular set of PowerShell scripts to automate Windows 11 PC setup for reviews and deployment. The **`arm64v2`** branch correctly and **completely** handles **Windows on ARM (WoA)** — every app is installed as its native ARM64 build instead of an x64-emulated one.
+A modular set of PowerShell scripts to automate Windows 11 PC setup for reviews and deployment. The same one-click run works on **x64** and on **Windows on ARM (WoA)**: the scripts detect the machine's architecture and, on ARM64, install each app's native ARM64 build instead of an x64-emulated one.
 
 ## Scripts Overview
 
 ### Main Script
-- **`ReviewPC.RunAll.ps1`** - One-click setup that runs all components in sequence (including the post-install ARM64 audit)
+- **`ReviewPC.RunAll.ps1`** - One-click setup that runs all components in sequence (plus the post-install ARM64 audit on ARM64 hosts)
 
 ### Modular Components
 - **`Common.Utils.ps1`** - Shared utilities: admin elevation, logging, registry, and the **single source of truth** for architecture detection (`Get-ReviewPCArch` / `Test-ReviewPCIsArm64`), the installed-app catalog (`Get-ReviewPCAppCatalog`), and the robust winget / direct-download install helpers
@@ -72,18 +72,18 @@ All scripts create timestamped logs in the `logs/` subdirectory for troubleshoot
 
 ---
 
-## Windows on ARM (ARM64) support — `arm64v2`
+## Windows on ARM (ARM64) support
 
-The `arm64v2` branch makes the **whole suite** architecture-aware so the same one-click orchestrator works correctly on both x64 and ARM64 (Snapdragon / Surface) hosts.
+The **whole suite** is architecture-aware, so the same one-click orchestrator works on both x64 and ARM64 (Snapdragon / Surface) hosts. There is nothing to configure: the architecture is detected automatically.
 
 On an **x64** host behavior is **unchanged** (everything still installs via Chocolatey). On an **ARM64** host `ReviewPC.Install.ps1` detects the architecture and installs the **native ARM64** build of every app instead of the x64 Chocolatey package, avoiding x64 binaries that would otherwise run under Windows ARM64 emulation.
 
 ### How it works
-1. **Single source of truth.** `Common.Utils.ps1` owns `Get-ReviewPCArch` (reads `PROCESSOR_ARCHITEW6432` → `PROCESSOR_ARCHITECTURE`, normalizing `aarch64`/`ARM64`) and `Get-ReviewPCAppCatalog` — a table of every app with its expected install paths and whether a **native ARM64** build is expected. The installer, `FinishSetup.ps1`, and the auditor all consume these, so architecture logic and path/version expectations **cannot drift**.
+1. **Single source of truth.** `Common.Utils.ps1` owns `Get-ReviewPCArch`, which reads the **machine-level** `PROCESSOR_ARCHITECTURE` (the real OS architecture, correct even when PowerShell itself is an x64 build running emulated on ARM), falling back to the process-level `PROCESSOR_ARCHITEW6432` → `PROCESSOR_ARCHITECTURE`, and `Get-ReviewPCAppCatalog` — a table of every app with its expected install paths and whether a **native ARM64** build is expected. The installer, `FinishSetup.ps1`, and the auditor all consume these, so architecture logic and path/version expectations **cannot drift**.
 2. **`ReviewPC.Install.ps1` branches on `$IsArm64`:**
    - **ARM64** → winget per-arch packages + direct ARM64 installer/zip URLs, each **HEAD-validated**, downloaded with **retry + size checks**, then each app's path is **self-verified**.
    - **x64** → the original Chocolatey block, unchanged.
-3. **`ReviewPC.RunAll.ps1` wires the auditor in** as the final step, so the one-click flow self-verifies the ARM install.
+3. **`ReviewPC.RunAll.ps1` wires the auditor in** as the final step on ARM64 hosts, so the one-click flow self-verifies the ARM install (skipped on x64, where it does not apply).
 4. **`ReviewPC.FinishSetup.ps1` verifies the Start-Menu `.lnk` files** the taskbar-pin step depends on, so a failed ARM install surfaces instead of silently no-oping.
 
 ### Per-app ARM64 mechanism
@@ -100,7 +100,7 @@ On an **x64** host behavior is **unchanged** (everything still installs via Choc
 | uv | winget `astral-sh.uv` (native aarch64) | native |
 | Miniconda3 | official **x86_64** Miniconda (runs under x64 emulation) — **no native arm64 installer exists** | emulated (WARN) |
 | LM Studio | winget `ElementLabs.LMStudio` (native `-arm64.exe`) | native |
-| Ollama | direct `ollama-windows-arm64.zip` from GitHub **latest** release (winget's `Ollama.Ollama` is x64-only); `ollama serve` is started and an **Ollama Serve** logon task is registered | native |
+| Ollama | direct `ollama-windows-arm64.zip` from GitHub **latest** release; `ollama serve` is started and an **Ollama Serve** logon task is registered | native |
 | CPU-Z | direct `download.cpuid.com/.../cpuz-arm64_1.05.zip` (native ARM64 portable) | native |
 | HWMonitor | direct `download.cpuid.com/.../hwmonitor-arm64_1.05.zip` (native ARM64 portable) | native |
 | CrystalDiskMark | winget `CrystalDewWorld.CrystalDiskMark` (universal installer → native arm64) | native |
@@ -109,19 +109,19 @@ On an **x64** host behavior is **unchanged** (everything still installs via Choc
 | PowerToys | winget `Microsoft.PowerToys` (native `-arm64.exe`) | native |
 | Windows Terminal | winget `Microsoft.WindowsTerminal` (multi-arch MSIX) | native |
 
-> **x64 hosts:** the x64 path installs exactly the same apps as `main`. This branch only changes install behavior on ARM64 hosts, so it can be merged into `main`.
+> **x64 hosts:** the x64 path is the original Chocolatey flow and installs the same app set; only ARM64 hosts take the winget / direct-download path.
 
 ### Caveats
 - **Visual Studio 2022 is now a NATIVE ARM64 app** (since 17.4). On an ARM64 host the bootstrapper installs the native ARM64 IDE + build toolchain automatically (`--arch` is a layout-only option and is not passed). A few legacy/auxiliary workloads can still fall back to emulation; the auditor expects a native `devenv.exe` (PASS) and treats any residual emulated component as informational. The minimal `--add Microsoft.VisualStudio.Workload.CoreEditor` is installed; extend with extra `--add ...` flags (e.g. `Microsoft.VisualStudio.Workload.NativeDesktop`) if needed.
 - **Miniconda3 has NO native Windows-ARM64 installer** (verified: `Miniconda3-latest-Windows-arm64.exe` is HTTP 404; repo.anaconda.com/miniconda ships only Windows x86/x64). It is installed as the official **x86_64** build under x64 emulation and is a documented **WARN**, never a FAIL. Prefer the system **ARM64 Python + uv/pip** for new environments. Re-check Anaconda before relying on a native arm64 build.
-- **Chocolatey has no native ARM64 build** and runs under x64 emulation. On ARM it is bootstrapped (harmless) but **bypassed** for all app installs — this is the core of the arm64v2 design.
-- **Ollama** is installed from GitHub releases as `ollama-windows-arm64.zip` (native ARM64). Do **not** use winget `Ollama.Ollama` on ARM — its manifest only ships an x64 `OllamaSetup.exe`.
+- **Chocolatey has no native ARM64 build** and runs under x64 emulation. On ARM it is bootstrapped (harmless) but **bypassed** for all app installs — this is the core of the ARM64 design.
+- **Ollama** is installed from GitHub releases as `ollama-windows-arm64.zip` (native ARM64), which ships only the CLI/server, so the tray app and auto-updater are not installed.
 - **Direct download URLs** (Python 3.12.0, VS bootstrapper, CPU-Z/HWMonitor zips) are **HEAD-validated** at install time and downloaded with retry + size validation. A 404 now **fails loudly** (reported) rather than being silently swallowed as a WARN. If cpuid bumps the zip version from `1.05`, update the pinned URL in `ReviewPC.Install.ps1` (the failure message will tell you the URL didn't resolve).
 - **winget agreement prompts.** The ARM path passes `--accept-*` so installs stay silent; a source agreement may still be needed the first time winget runs.
 - **`uv` arm64-Python note.** uv's binary is native aarch64, but uv's managed-Python fetch historically downloaded x86_64 Python on arm64 Windows ([astral-sh/uv#12906](https://github.com/astral-sh/uv/issues/12906)). Since Python 3.12 is installed natively ARM64, rely on the system interpreter or pin `UV_PYTHON_INSTALL_MIRROR` when using `uv python install`.
 
 ## Auditing the install
-`Test-ReviewPCArm64v2.ps1` is the post-install ARM64 auditor. It is **wired into `ReviewPC.RunAll.ps1`** as the final step and can also be run standalone **as administrator on the target Windows-on-ARM machine** after bootstrap.
+`Test-ReviewPCArm64v2.ps1` is the post-install ARM64 auditor. It is **wired into `ReviewPC.RunAll.ps1`** as the final step on ARM64 hosts and can also be run standalone **as administrator on the target Windows-on-ARM machine** after bootstrap.
 
 It reads the COFF/PE machine word of each primary executable:
 - **PASS** = present AND PE machine `0xAA64` (ARM64), or a Windows Terminal MSIX reparse point (native multi-arch).

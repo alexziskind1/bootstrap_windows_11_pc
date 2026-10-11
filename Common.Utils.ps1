@@ -209,13 +209,18 @@ function Invoke-ReviewPCScript {
 # ---------------------------------------------------------------------
 # Single source of truth for host architecture detection.
 #
-# Reads $env:PROCESSOR_ARCHITEW6432 first: that variable carries the real OS
-# architecture when the running PowerShell process is 32-bit running on a
-# 64-bit OS (WOW64). It falls back to $env:PROCESSOR_ARCHITECTURE for native
-# processes. Returns one of: 'ARM64' | 'ARM' | 'AMD64' | 'x86'.
+# Reads the MACHINE-level PROCESSOR_ARCHITECTURE first (HKLM ...\Session
+# Manager\Environment): that is the real OS architecture no matter how this
+# PowerShell process is running. The process-level variables are rewritten by
+# the emulation layer - an x64 PowerShell running emulated on Windows on ARM
+# sees PROCESSOR_ARCHITECTURE=AMD64 with PROCESSOR_ARCHITEW6432 unset, which
+# would send an ARM machine down the x64 path. They are kept as fallbacks:
+# $env:PROCESSOR_ARCHITEW6432 (real OS arch for a 32-bit WOW64 process), then
+# $env:PROCESSOR_ARCHITECTURE. Returns one of: 'ARM64' | 'ARM' | 'AMD64' | 'x86'.
 # ---------------------------------------------------------------------
 function Get-ReviewPCArch {
-  $arch = $env:PROCESSOR_ARCHITEW6432
+  $arch = [System.Environment]::GetEnvironmentVariable('PROCESSOR_ARCHITECTURE', 'Machine')
+  if (-not $arch) { $arch = $env:PROCESSOR_ARCHITEW6432 }
   if (-not $arch) { $arch = $env:PROCESSOR_ARCHITECTURE }
   # Normalize aliases
   if ($arch -eq 'x86_64')            { $arch = 'AMD64' }
@@ -264,7 +269,9 @@ function ReviewPCPath {
 #                   emulated and is a documented WARN, never a FAIL.
 #   WarnNote    - reason shown by the auditor when NativeExpected is $false.
 #   Cmd         - CLI name used as a Get-Command fallback to locate the path.
-#   Paths       - ordered candidate install paths for the primary binary.
+#   Paths       - ordered candidate install paths for the primary binary. A
+#                 candidate may contain * for directories whose name carries
+#                 a version or package suffix.
 #   InstallMethod - string describing the ARM64 install mechanism.
 # ---------------------------------------------------------------------
 function Get-ReviewPCAppCatalog {
@@ -303,7 +310,10 @@ function Get-ReviewPCAppCatalog {
        InstallMethod='winget Microsoft.VisualStudioCode (native arm64 exe)' },
     @{ Id='python'; Name='Python 3.12'; Category='DevTools'; NativeExpected=$true;
        Cmd='python';
-       Paths=@((ReviewPCPath $pf "Python312\python.exe"),
+       # The ARM64 installer appends -arm64 to its default target directory.
+       Paths=@((ReviewPCPath $pf "Python312-arm64\python.exe"),
+               (ReviewPCPath $la "Programs\Python\Python312-arm64\python.exe"),
+               (ReviewPCPath $pf "Python312\python.exe"),
                (ReviewPCPath $la "Programs\Python\Python312\python.exe"));
        InstallMethod='direct python-3.12.0-arm64.exe from python.org (InstallAllUsers -> Program Files)' },
     @{ Id='node'; Name='Node.js LTS'; Category='DevTools'; NativeExpected=$true;
@@ -318,7 +328,7 @@ function Get-ReviewPCAppCatalog {
     @{ Id='uv'; Name='uv'; Category='DevTools'; NativeExpected=$true;
        Cmd='uv';
        Paths=@((ReviewPCPath $la "Microsoft\WinGet\Links\uv.exe"),
-               (ReviewPCPath $la "Microsoft\WinGet\Packages\astral-sh.uv\uv.exe"),
+               (ReviewPCPath $la "Microsoft\WinGet\Packages\astral-sh.uv_*\uv.exe"),
                (ReviewPCPath "$env:USERPROFILE\.local\bin" "uv.exe"),
                (ReviewPCPath $la "Programs\uv\uv.exe"));
        InstallMethod='winget astral-sh.uv (native aarch64)' },
@@ -332,12 +342,13 @@ function Get-ReviewPCAppCatalog {
     # --- AI tooling ---
     @{ Id='lmstudio'; Name='LM Studio'; Category='AITools'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((ReviewPCPath $la "Programs\LM Studio\LM Studio.exe"));
+       Paths=@((ReviewPCPath $la "Programs\LM Studio\LM Studio.exe"),
+               (ReviewPCPath $pf "LM Studio\LM Studio.exe"));
        InstallMethod='winget ElementLabs.LMStudio (native -arm64.exe)' },
     @{ Id='ollama'; Name='Ollama'; Category='AITools'; NativeExpected=$true;
        Cmd='ollama';
        Paths=@((ReviewPCPath $la "Programs\Ollama\ollama.exe"));
-       InstallMethod='direct ollama-windows-arm64.zip from github latest (winget Ollama.Ollama is x64-only)' },
+       InstallMethod='direct ollama-windows-arm64.zip from github latest (native ARM64 CLI/server)' },
 
     # --- Benchmark / monitoring ---
     @{ Id='cpu-z'; Name='CPU-Z'; Category='Monitoring'; NativeExpected=$true;
@@ -352,8 +363,10 @@ function Get-ReviewPCAppCatalog {
        InstallMethod='direct hwmonitor-arm64_*.zip from download.cpuid.com (native ARM64 portable)' },
     @{ Id='crystaldiskmark'; Name='CrystalDiskMark'; Category='Monitoring'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((ReviewPCPath $pf "CrystalDiskMark\DiskMark64.exe"),
-               (ReviewPCPath $pf "CrystalDiskMark\CrystalDiskMark.exe"));
+       # The install directory carries the major version (CrystalDiskMark9) and
+       # the native ARM64 binary is DiskMarkA64.exe; DiskMark64.exe is the x64 one.
+       Paths=@((ReviewPCPath $pf "CrystalDiskMark*\DiskMarkA64.exe"),
+               (ReviewPCPath $pf "CrystalDiskMark*\DiskMark64.exe"));
        InstallMethod='winget CrystalDewWorld.CrystalDiskMark (universal installer -> native arm64)' },
 
     # --- Media / productivity ---
@@ -371,7 +384,8 @@ function Get-ReviewPCAppCatalog {
        InstallMethod='winget Notepad++.Notepad++ (native .Installer.arm64.exe)' },
     @{ Id='powertoys'; Name='PowerToys'; Category='Utilities'; NativeExpected=$true;
        Cmd=$null;
-       Paths=@((ReviewPCPath $la "Microsoft\PowerToys\PowerToys.exe"));
+       Paths=@((ReviewPCPath $pf "PowerToys\PowerToys.exe"),
+               (ReviewPCPath $la "PowerToys\PowerToys.exe"));
        InstallMethod='winget Microsoft.PowerToys (native -arm64.exe)' },
     @{ Id='terminal'; Name='Windows Terminal'; Category='Utilities'; NativeExpected=$true;
        Cmd='wt';
@@ -397,7 +411,11 @@ function Resolve-ReviewPCAppPath {
     [Parameter(Mandatory)]$App
   )
   foreach ($c in $App.Paths) {
-    if ($c -and (Test-Path -LiteralPath $c -PathType Leaf)) { return $c }
+    if (-not $c) { continue }
+    if ($c.Contains('*')) {
+      $hit = Get-Item -Path $c -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($hit) { return $hit.FullName }
+    } elseif (Test-Path -LiteralPath $c -PathType Leaf) { return $c }
   }
   if ($App.Cmd) {
     $cmd = Get-Command $App.Cmd -ErrorAction SilentlyContinue
@@ -431,11 +449,10 @@ function Install-ReviewPCWinget {
   if ($TrustSource) { $wingetArgs += '--accept-microsoft-store-terms' }
   if ($ExtraArgs.Count -gt 0) { $wingetArgs += $ExtraArgs }
 
-  # 0x8A15001B == "already installed" in winget (signed: -1978335205).
-  # 0x8A150011 == "installed but not from this source / multiple packages"
-  #               (signed: -1978335215). These are benign when the package is
-  #               genuinely present; genuineness is re-confirmed via winget list.
-  $ALREADY_INSTALLED_CODES = @(-1978335205, -1978335215, 0)
+  # winget exit codes that mean "nothing to do, the package is already here":
+  #   0x8A150061 (-1978335135) PACKAGE_ALREADY_INSTALLED
+  #   0x8A15002B (-1978335189) UPDATE_NOT_APPLICABLE (installed, no newer version)
+  $ALREADY_INSTALLED_CODES = @(-1978335135, -1978335189)
 
   $attempts = 0
   while ($attempts -lt 3) {
@@ -509,9 +526,14 @@ function Install-ReviewPCDownloadAndRun {
     }
     Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running installer: $FileName $SilentArgs"
     if ($SilentArgs -ne "") {
-      Start-Process -FilePath $out -ArgumentList $SilentArgs -Wait -NoNewWindow
+      $proc = Start-Process -FilePath $out -ArgumentList $SilentArgs -Wait -NoNewWindow -PassThru
     } else {
-      Start-Process -FilePath $out -Wait
+      $proc = Start-Process -FilePath $out -Wait -PassThru
+    }
+    # 3010 / 1641 == success, reboot required / initiated.
+    if ($proc.ExitCode -notin @(0, 3010, 1641)) {
+      Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR: installer $FileName exited with code $($proc.ExitCode)." -ForegroundColor Red
+      return $false
     }
     Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installer $FileName finished." -ForegroundColor Green
     return $true
@@ -633,9 +655,10 @@ function Invoke-ReviewPCDownload {
 
 # ---------------------------------------------------------------------
 # Install Ollama natively on ARM64 from the GitHub "latest" release.
-# winget's Ollama.Ollama manifest is x64-only, so we use the dedicated
-# native ARM64 zip. The 'latest' URL is always resolved by GitHub, so this
-# never goes stale (gap #3 in the old arm64 branch).
+# Uses the dedicated native ARM64 zip (CLI/server only, no tray app). winget's
+# Ollama.Ollama now lists an arm64 entry too (OllamaSetup.exe installs the
+# native build plus the tray app) and is the alternative. The 'latest' URL
+# is always resolved by GitHub, so this never goes stale.
 # ---------------------------------------------------------------------
 function Install-ReviewPCOllamaArm64 {
   param(

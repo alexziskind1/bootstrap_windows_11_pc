@@ -203,6 +203,11 @@ if (-not (Test-ReviewPCIsArm64)) {
   exit 0
 }
 
+# Pick up PATH entries added by the installers since this session started
+# (the CLI fallback in Resolve-ReviewPCAppPath depends on it).
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+            [System.Environment]::GetEnvironmentVariable("Path","User")
+
 # ---------------------------------------------------------------------------
 # Evaluate each item
 # ---------------------------------------------------------------------------

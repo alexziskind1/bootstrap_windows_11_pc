@@ -40,3 +40,6 @@ temp/
 
 # Any generated XML layouts
 *TaskbarLayoutModification.xml
+
+# macOS
+.DS_Store

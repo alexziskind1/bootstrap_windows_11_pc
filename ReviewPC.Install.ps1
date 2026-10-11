@@ -121,6 +121,12 @@ else {
   # ARM64 / NATIVE PATH (Windows on ARM) - arm64v2
   # =====================================================================
 
+  # Most of this path goes through winget; say so up front if it is missing
+  # rather than letting every app fail one by one.
+  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR: winget not found. Update 'App Installer' from the Microsoft Store and re-run; winget-based installs below will fail." -ForegroundColor Red
+  }
+
   # --- 2) Browsers ---
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Installing browsers..." -ForegroundColor Cyan
   $Results += @{ Id='chrome'; Ok=(Install-ReviewPCWinget -PackageId "Google.Chrome") }
@@ -134,7 +140,7 @@ else {
   $Results += @{ Id='python'; Ok=(Install-ReviewPCDownloadAndRun `
                         -Url "https://www.python.org/ftp/python/3.12.0/python-3.12.0-arm64.exe" `
                         -FileName "python-3.12.0-arm64.exe" `
-                        -ExpectedSizeMB 25 `
+                        -ExpectedSizeMB 20 `
                         -SilentArgs "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0") }
   # Node.js LTS - native arm64 MSI.
   $Results += @{ Id='node'; Ok=(Install-ReviewPCWinget -PackageId "OpenJS.NodeJS.LTS") }
@@ -163,7 +169,7 @@ else {
   # --- 4) AI tooling ---
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Installing AI tooling..." -ForegroundColor Cyan
   $Results += @{ Id='lmstudio'; Ok=(Install-ReviewPCWinget -PackageId "ElementLabs.LMStudio") }
-  # Ollama - NATIVE ARM64 zip from GitHub latest (winget Ollama.Ollama is x64-only).
+  # Ollama - NATIVE ARM64 zip from GitHub latest.
   $Results += @{ Id='ollama'; Ok=(Install-ReviewPCOllamaArm64) }
 
   # --- 5) Benchmark / monitoring trio ---
@@ -203,6 +209,9 @@ else {
 # truth = Get-ReviewPCAppCatalog). Independent of the mechanism used.
 # ---------------------------------------------------------------------
 Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Verifying installed app paths..." -ForegroundColor Cyan
+# Pick up PATH entries the installers just added (CLI fallback lookups).
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" +
+            [System.Environment]::GetEnvironmentVariable("Path","User")
 $allOk = $true
 foreach ($entry in $Results) {
   if ($entry.Ok) {
@@ -210,7 +219,7 @@ foreach ($entry in $Results) {
     if (-not $appPathOk) { $allOk = $false }
   } else {
     Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - WARNING: $($entry.Id) install helper reported failure; support this app manually." -ForegroundColor Yellow
-    $entry.Ok = $false
+    $allOk = $false
   }
 }
 
@@ -220,7 +229,10 @@ if ($GitUserName -and $GitUserEmail) {
   Set-ReviewPCGitConfig -UserName $GitUserName -UserEmail $GitUserEmail -ScriptPrefix "Install"
 }
 
-if ($allOk) {
+if (-not $IsArm64) {
+  # The x64 path reports per-package results inline (Chocolatey exit codes).
+  Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installer finished." -ForegroundColor Green
+} elseif ($allOk) {
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installer finished; all primary binaries verified present." -ForegroundColor Green
 } else {
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Installer finished with some apps unverified - review the warnings above and run the audit." -ForegroundColor Yellow

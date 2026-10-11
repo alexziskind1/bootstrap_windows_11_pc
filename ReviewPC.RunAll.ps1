@@ -6,8 +6,10 @@
    3) Runs your ReviewPC.Install.ps1 (arch-aware app install: Chocolatey on x64,
       native ARM64 via winget/direct URLs on Windows-on-ARM)
    4) Runs ReviewPC.FinishSetup.ps1 (Chrome default, taskbar pins, notifications off, dev/power tweaks)
-   5) Runs the post-install ARM64 audit (Test-ReviewPCArm64v2.ps1) and reports
-      PASS/WARN/FAIL - wired into the normal suite run (arm64v2).
+   5) On a Windows-on-ARM host, runs the post-install ARM64 audit
+      (Test-ReviewPCArm64v2.ps1) and reports PASS/WARN/FAIL.
+
+  The x64 / ARM64 choice is automatic (Get-ReviewPCArch in Common.Utils.ps1).
 
   Usage (PowerShell as admin is automatic):
     Set-ExecutionPolicy Bypass -Scope Process -Force
@@ -117,14 +119,14 @@ try {
   $auditExit = 0
   if ($SkipAudit) {
     Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Skipping post-install audit (-SkipAudit)." -ForegroundColor Yellow
+  } elseif (-not (Test-ReviewPCIsArm64)) {
+    Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - $(Get-ReviewPCArch) host: the ARM64 audit does not apply, skipping." -ForegroundColor Cyan
   } else {
     $AuditScript = Join-Path $ScriptRoot "Test-ReviewPCArm64v2.ps1"
     if (Test-Path $AuditScript) {
       Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running post-install ARM64 audit..." -ForegroundColor Cyan
       # Run the auditor in a child PowerShell process so its `exit` status is
-      # captured as $LASTEXITCODE without terminating this orchestrator. On an
-      # ARM64 host it runs Live (real PE inspection); on an x64 host the auditor
-      # automatically falls back to DryRun (which exits 0).
+      # captured as $LASTEXITCODE without terminating this orchestrator.
       & powershell -NoProfile -ExecutionPolicy Bypass -File $AuditScript -Mode Live
       $auditExit = $LASTEXITCODE
       if ($auditExit -eq 0) {
