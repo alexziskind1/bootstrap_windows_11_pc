@@ -161,16 +161,22 @@ function Set-ReviewPCRegistry {
 
   $full = Join-Path "${Hive}:" $Path
   try {
-    if (-not (Test-Path $full)) { New-Item -Path $full -Force | Out-Null }
-    New-ItemProperty -Path $full -Name $Name -Value $Value -PropertyType $Type -Force | Out-Null
+    if (-not (Test-Path $full)) { New-Item -Path $full -Force -ErrorAction Stop | Out-Null }
+    # -ErrorAction Stop: an access-denied write is otherwise non-terminating,
+    # so the catch (and the reg.exe fallback) would never run.
+    New-ItemProperty -Path $full -Name $Name -Value $Value -PropertyType $Type -Force -ErrorAction Stop | Out-Null
     Write-Verbose "Registry: Set $Hive\$Path\$Name = $Value (PowerShell method)"
   } catch {
     # Fallback using reg.exe (helps if policy locks PowerShell provider)
     $regType = switch ($Type) { 'String' {'REG_SZ'} 'DWord' {'REG_DWORD'} 'QWord' {'REG_QWORD'} }
-    $root = if ($Hive -eq 'HKLM') { 'HKLM' } else { 'HKCU' }
-    $cmd = "ADD `"$root\$Path`" /v `"$Name`" /t $regType /d $Value /f"
-    & reg.exe $cmd | Out-Null
-    Write-Verbose "Registry: Set $Hive\$Path\$Name = $Value (reg.exe fallback)"
+    & reg.exe ADD "$Hive\$Path" /v $Name /t $regType /d $Value /f 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      Write-Verbose "Registry: Set $Hive\$Path\$Name = $Value (reg.exe fallback)"
+    } else {
+      # Some values (e.g. Explorer\Advanced\TaskbarDa) are guarded by the UCPD
+      # driver on current Windows 11 builds and refuse every scripted write.
+      Write-Host "  WARNING: could not set $Hive\$Path\$Name (access denied - likely protected by Windows)." -ForegroundColor Yellow
+    }
   }
 }
 
@@ -436,16 +442,24 @@ function Resolve-ReviewPCAppPath {
 # package is already installed; after any install attempt we re-check via
 # `winget list` and only report failure when the package is genuinely not
 # present. Returns $true on success / $false on failure (after retries).
+#
+# The source is pinned to 'winget' (the community repo every catalog id lives
+# in). Without it winget searches msstore too, and on a fresh install the
+# msstore source often fails (0x8A15005E certificate pin mismatch); winget then
+# refuses to pick a source and every install fails with 0x8A15005E /
+# "Please specify one of them using the --source option".
 # ---------------------------------------------------------------------
 function Install-ReviewPCWinget {
   param(
     [Parameter(Mandatory)][string]$PackageId,
     [string]$ScriptPrefix = "Install",
     [string[]]$ExtraArgs = @(),
+    [string]$Source = 'winget',
     [switch]$TrustSource
   )
   Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - winget installing $PackageId ..."
   $wingetArgs = @('install', '--id', $PackageId, '-e', '--silent',
+                  '--source', $Source,
                   '--accept-package-agreements', '--accept-source-agreements',
                   '--disable-interactivity')
   if ($TrustSource) { $wingetArgs += '--accept-microsoft-store-terms' }
@@ -475,6 +489,13 @@ function Install-ReviewPCWinget {
         return $true
       }
       Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - winget $PackageId returned exit code $code (attempt $attempts/3)." -ForegroundColor Yellow
+      # 0x8A150011 (-1978335215) INSTALLER_HASH_MISMATCH: the manifest's hash is
+      # stale, so every retry re-downloads and fails the same way. Let the
+      # caller fall back instead.
+      if ($code -eq -1978335215) {
+        Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - $PackageId installer hash mismatch (stale winget manifest); not retrying." -ForegroundColor Yellow
+        return $false
+      }
       Start-Sleep -Seconds 5
     } catch {
       Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - ERROR winget $PackageId (attempt $attempts/3): $($_.Exception.Message)" -ForegroundColor Yellow
@@ -527,7 +548,10 @@ function Install-ReviewPCDownloadAndRun {
       return $false
     }
     Write-Host "[$ScriptPrefix] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running installer: $FileName $SilentArgs"
-    if ($SilentArgs -ne "") {
+    if ([IO.Path]::GetExtension($out) -eq '.msi') {
+      # An .msi is not an executable; it has to go through msiexec.
+      $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$out`" $SilentArgs" -Wait -NoNewWindow -PassThru
+    } elseif ($SilentArgs -ne "") {
       $proc = Start-Process -FilePath $out -ArgumentList $SilentArgs -Wait -NoNewWindow -PassThru
     } else {
       $proc = Start-Process -FilePath $out -Wait -PassThru

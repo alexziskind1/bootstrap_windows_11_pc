@@ -92,10 +92,21 @@ if (-not (Test-Path $TaskMgrLnk)) {
   $Shortcut.Save()
 }
 
+# Windows Terminal is an MSIX package (inbox on Windows 11, and what winget
+# installs), so there is normally no .lnk to point at; pin it by AppUserModelID.
+$TerminalAumid = $null
+if (-not (Test-Path $TerminalLnk) -and (Get-AppxPackage -Name Microsoft.WindowsTerminal -ErrorAction SilentlyContinue)) {
+  $TerminalAumid = 'Microsoft.WindowsTerminal_8wekyb3d8bbwe!App'
+}
+
 # Final pin order
-$pins = @()
+$pinXml = @()
 foreach ($lnk in @($TaskMgrLnk,$VStudioLnk,$VSCodeLnk,$TerminalLnk,$ChromeLnk)) {
-  if ($lnk -and (Test-Path $lnk)) { $pins += $lnk }
+  if ($lnk -and (Test-Path $lnk)) {
+    $pinXml += '            <taskbar:DesktopApp DesktopApplicationLinkPath="' + [System.Security.SecurityElement]::Escape($lnk) + '" />'
+  } elseif ($lnk -eq $TerminalLnk -and $TerminalAumid) {
+    $pinXml += '            <taskbar:UWA AppUserModelID="' + $TerminalAumid + '" />'
+  }
 }
 
 # Shortcut presence summary (arch-aware): on ARM these Start-Menu .lnk files are
@@ -107,17 +118,17 @@ foreach ($c in @(@{n='Task Manager';p=$TaskMgrLnk},@{n='Visual Studio';p=$VStudi
                  @{n='Chrome';p=$ChromeLnk})) {
   if ($c.p -and (Test-Path $c.p)) {
     Write-Host "[Finish]   [OK] $($c.n): $($c.p)" -ForegroundColor Green
+  } elseif ($c.n -eq 'Windows Terminal' -and $TerminalAumid) {
+    Write-Host "[Finish]   [OK] $($c.n): $TerminalAumid (MSIX)" -ForegroundColor Green
   } else {
     Write-Host "[Finish]   [MISSING] $($c.n)" -ForegroundColor Yellow
   }
 }
 
-if ($pins.Count -eq 0) {
+if ($pinXml.Count -eq 0) {
   Write-Host "[Finish] No pin targets found. Run after apps are installed."
 } else {
-  $xmlPins = ($pins | ForEach-Object {
-'            <taskbar:DesktopApp DesktopApplicationLinkPath="' + [System.Security.SecurityElement]::Escape($_) + '" />'
-  }) -join "`r`n"
+  $xmlPins = $pinXml -join "`r`n"
 
   $xml = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -179,7 +190,10 @@ try {
   Set-ReviewPCRegistry HKLM 'SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot' 'TurnOffWindowsCopilot' 1
   Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\Shell\Copilot' 'CopilotAvailability' 0
   Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Search' 'SearchboxTaskbarMode' 0
-  Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarDa' 0
+  # Widgets: no registry write here. Explorer\Advanced\TaskbarDa and the
+  # Policies\Microsoft\Dsh key are both UCPD-protected on current Windows 11
+  # builds (every scripted write is denied); Win11Debloat's -DisableWidgets
+  # handles it by uninstalling the Widgets packages instead.
   Set-ReviewPCRegistry HKCU 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarMn' 0
   
   # Remove default taskbar pins (Microsoft Store, Outlook, etc.)

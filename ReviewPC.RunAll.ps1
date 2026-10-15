@@ -19,12 +19,15 @@
     -SysprepMode   => apply debloat to Default profile (affects NEW users) in addition to current user
     -Silent        => hides debloat prompts (default on)
     -SkipAudit     => do not run the post-install ARM64 audit at the end
+    -GitUserName / -GitUserEmail => skip the Git prompts (for unattended / SSH runs)
 #>
 
 param(
   [switch]$SysprepMode,
   [switch]$Silent = $true,
-  [switch]$SkipAudit
+  [switch]$SkipAudit,
+  [string]$GitUserName,
+  [string]$GitUserEmail
 )
 
 # Import common utilities
@@ -48,16 +51,19 @@ try {
   # ---------------------------
   Write-Host "`n[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Collecting user configuration..." -ForegroundColor Yellow
   
-  # Git Configuration
-  Write-Host "`nGit will be installed as part of this setup. Please provide your Git configuration:" -ForegroundColor Cyan
-  
-  do {
+  # Git Configuration (prompt only for what wasn't passed as a parameter)
+  $emailPattern = '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+  if ([string]::IsNullOrWhiteSpace($GitUserName) -or $GitUserEmail -notmatch $emailPattern) {
+    Write-Host "`nGit will be installed as part of this setup. Please provide your Git configuration:" -ForegroundColor Cyan
+  }
+
+  while ([string]::IsNullOrWhiteSpace($GitUserName)) {
     $GitUserName = Read-Host "Enter your Git user name (e.g., 'John Doe')"
-  } while ([string]::IsNullOrWhiteSpace($GitUserName))
-  
-  do {
+  }
+
+  while ([string]::IsNullOrWhiteSpace($GitUserEmail) -or $GitUserEmail -notmatch $emailPattern) {
     $GitUserEmail = Read-Host "Enter your Git email address (e.g., 'john@example.com')"
-  } while ([string]::IsNullOrWhiteSpace($GitUserEmail) -or $GitUserEmail -notmatch '^[^\s@]+@[^\s@]+\.[^\s@]+$')
+  }
   
   Write-Host "[RunAll] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Git config: Name='$GitUserName', Email='$GitUserEmail'" -ForegroundColor Green
   

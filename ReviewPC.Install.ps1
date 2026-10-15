@@ -129,7 +129,18 @@ else {
 
   # --- 2) Browsers ---
   Write-Host "[Install] $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [ARM64] Installing browsers..." -ForegroundColor Cyan
-  $Results += @{ Id='chrome'; Ok=(Install-ReviewPCWinget -PackageId "Google.Chrome") }
+  $chromeOk = Install-ReviewPCWinget -PackageId "Google.Chrome"
+  if (-not $chromeOk) {
+    # winget's Chrome manifest points at Google's unversioned "latest" MSI, so
+    # its pinned hash goes stale whenever Chrome ships ahead of the manifest
+    # (0x8A150011). Fall back to that same official ARM64 MSI directly.
+    $chromeOk = Install-ReviewPCDownloadAndRun `
+                  -Url "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise_arm64.msi" `
+                  -FileName "googlechromestandaloneenterprise_arm64.msi" `
+                  -ExpectedSizeMB 100 `
+                  -SilentArgs "/qn /norestart"
+  }
+  $Results += @{ Id='chrome'; Ok=$chromeOk }
   # Install-ReviewPCWinget -PackageId "Mozilla.Firefox"   # firefox (commented out, as on x64)
 
   # --- 3) Dev tools ---

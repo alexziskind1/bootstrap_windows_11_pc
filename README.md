@@ -27,6 +27,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 - `-SysprepMode` - Apply debloat to Default profile (affects new users)
 - `-Silent` - Hide debloat prompts (default: true)
 - `-SkipAudit` - Do not run the post-install ARM64 audit at the end
+- `-GitUserName` / `-GitUserEmail` - Supply the Git identity up front so the run needs no prompts (unattended / SSH)
 
 ### Individual Scripts
 Each component can be run independently:
@@ -118,6 +119,9 @@ On an **x64** host behavior is **unchanged** (everything still installs via Choc
 - **Ollama** is installed from GitHub releases as `ollama-windows-arm64.zip` (native ARM64), which ships only the CLI/server, so the tray app and auto-updater are not installed.
 - **Direct download URLs** (Python 3.12.0, VS bootstrapper, CPU-Z/HWMonitor zips) are **HEAD-validated** at install time and downloaded with retry + size validation. A 404 now **fails loudly** (reported) rather than being silently swallowed as a WARN. If cpuid bumps the zip version from `1.05`, update the pinned URL in `ReviewPC.Install.ps1` (the failure message will tell you the URL didn't resolve).
 - **winget agreement prompts.** The ARM path passes `--accept-*` so installs stay silent; a source agreement may still be needed the first time winget runs.
+- **winget source is pinned to `winget`.** On a fresh Windows install the `msstore` source often fails (`0x8A15005E`, certificate pin mismatch). Without `--source`, winget then refuses to choose a source and *every* install fails, so `Install-ReviewPCWinget` passes `--source winget` (override with `-Source`).
+- **Chrome fallback.** winget's `Google.Chrome` manifest downloads Google's unversioned "latest" MSI, so its hash is often stale (`0x8A150011`, which admins cannot override). The installer then falls back to the same official `googlechromestandaloneenterprise_arm64.msi` directly.
+- **Widgets toggle.** `Explorer\Advanced\TaskbarDa` and `Policies\Microsoft\Dsh` are protected by the UCPD driver on current Windows 11 builds, so scripted writes are denied. Widgets are removed by Win11Debloat's `-DisableWidgets` (it uninstalls the Widgets packages), so `FinishSetup` no longer writes either key.
 - **`uv` arm64-Python note.** uv's binary is native aarch64, but uv's managed-Python fetch historically downloaded x86_64 Python on arm64 Windows ([astral-sh/uv#12906](https://github.com/astral-sh/uv/issues/12906)). Since Python 3.12 is installed natively ARM64, rely on the system interpreter or pin `UV_PYTHON_INSTALL_MIRROR` when using `uv python install`.
 
 ## Auditing the install
